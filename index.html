@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Glitch.js | Interactive Cyberpunk DOM Distortion Playground</title>
+  <meta name="description" content="An interactive showcase for glitch.js, a modular and stackable vanilla JavaScript library that applies hacker-movie style glitch effects to standard DOM elements.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="container">
+    <!-- Cyberpunk Header -->
+    <header>
+      <div class="title-area">
+        <h1>GLITCH.JS</h1>
+        <p>MODULAR DOM DISTORTION ENGINE // VER_1.0.4</p>
+      </div>
+      <div class="status-badge" id="system-status">
+        SYSTEM_ACTIVE
+      </div>
+    </header>
+
+    <!-- Main Sandbox Grid -->
+    <main class="sandbox-grid">
+      
+      <!-- Left Column: Controls and Configurations -->
+      <section class="controls-column">
+        
+        <!-- Preset Panel -->
+        <div class="card" style="margin-bottom: 2rem;">
+          <h2 class="card-title pink-text">PRESET_CONFIGS</h2>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Select a pre-configured glitch theme:</p>
+          <div class="presets-grid">
+            <button class="preset-btn active" data-preset="matrix">Matrix Hack</button>
+            <button class="preset-btn" data-preset="holo">Broken Holo</button>
+            <button class="preset-btn" data-preset="failure">Power Failure</button>
+            <button class="preset-btn" data-preset="subtle">Subtle UI</button>
+          </div>
+        </div>
+
+        <!-- Parameters Customizer -->
+        <div class="card">
+          <h2 class="card-title cyan-text">EFFECT_STACK</h2>
+          
+          <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; gap: 1rem;">
+            <div>
+              <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">TRIGGER_MODE</label>
+              <select id="trigger-mode" class="cyber-select">
+                <option value="always">Always Active</option>
+                <option value="hover">On Hover</option>
+                <option value="click">On Click (Toggle)</option>
+                <option value="scroll">On Scroll Viewport</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">ENGINE_STATE</label>
+              <label class="switch cyan-switch" style="margin-top: 2px;">
+                <input type="checkbox" id="engine-active" checked>
+                <span class="slider-switch"></span>
+              </label>
+            </div>
+          </div>
+
+          <form id="glitch-config-form">
+            
+            <!-- RGB Split Control Group -->
+            <div class="control-group pink-theme active" id="group-rgbSplit">
+              <div class="control-header">
+                <label class="control-label">
+                  <input type="checkbox" id="enable-rgbSplit" checked style="display:none;">
+                  <span class="switch">
+                    <input type="checkbox" id="toggle-rgbSplit" checked>
+                    <span class="slider-switch"></span>
+                  </span>
+                  RGB Split
+                </label>
+                <span style="font-size: 0.7rem; color: var(--neon-pink);">[RGB]</span>
+              </div>
+              <div class="sub-controls">
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Max Offset</span>
+                    <span class="value" id="val-rgb-offset">8px</span>
+                  </div>
+                  <input type="range" id="rgb-offset" min="1" max="30" value="8">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Frequency</span>
+                    <span class="value" id="val-rgb-freq">0.30</span>
+                  </div>
+                  <input type="range" id="rgb-freq" min="0.05" max="1.00" step="0.05" value="0.30">
+                </div>
+                <div>
+                  <span style="font-size: 0.8rem; color: var(--text-secondary);">Blend Mode:</span>
+                  <select id="rgb-blend" class="cyber-select" style="margin-left: 0.5rem; margin-bottom: 0.5rem;">
+                    <option value="screen" selected>Screen (Dark Theme)</option>
+                    <option value="multiply">Multiply (Light Theme)</option>
+                    <option value="difference">Difference</option>
+                    <option value="overlay">Overlay</option>
+                  </select>
+                </div>
+                <!-- Mouse speed integration -->
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 0.6rem; margin-bottom: 0.6rem;">
+                  <span style="font-size: 0.8rem; color: var(--text-secondary);">Scale with Mouse Speed:</span>
+                  <label class="switch" style="transform: scale(0.85);">
+                    <input type="checkbox" id="rgb-mouseInteract">
+                    <span class="slider-switch"></span>
+                  </label>
+                </div>
+                <div class="slider-container" id="rgb-mouseSens-container" style="display: none;">
+                  <div class="slider-info">
+                    <span>Mouse Sensitivity</span>
+                    <span class="value" id="val-rgb-mouseSens">1.5</span>
+                  </div>
+                  <input type="range" id="rgb-mouseSens" min="0.5" max="5.0" step="0.1" value="1.5">
+                </div>
+              </div>
+            </div>
+
+            <!-- Slice Control Group -->
+            <div class="control-group cyan-theme" id="group-slice">
+              <div class="control-header">
+                <label class="control-label">
+                  <span class="switch cyan-switch">
+                    <input type="checkbox" id="toggle-slice">
+                    <span class="slider-switch"></span>
+                  </span>
+                  Slice Shifting
+                </label>
+                <span style="font-size: 0.7rem; color: var(--neon-cyan);">[CLIP]</span>
+              </div>
+              <div class="sub-controls">
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Max Offset</span>
+                    <span class="value" id="val-slice-offset">15px</span>
+                  </div>
+                  <input type="range" id="slice-offset" min="5" max="60" value="15">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Frequency</span>
+                    <span class="value" id="val-slice-freq">0.25</span>
+                  </div>
+                  <input type="range" id="slice-freq" min="0.05" max="1.00" step="0.05" value="0.25">
+                </div>
+                <!-- Mouse speed integration -->
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 0.6rem; margin-bottom: 0.6rem;">
+                  <span style="font-size: 0.8rem; color: var(--text-secondary);">Scale with Mouse Speed:</span>
+                  <label class="switch cyan-switch" style="transform: scale(0.85);">
+                    <input type="checkbox" id="slice-mouseInteract">
+                    <span class="slider-switch"></span>
+                  </label>
+                </div>
+                <div class="slider-container" id="slice-mouseSens-container" style="display: none;">
+                  <div class="slider-info">
+                    <span>Mouse Sensitivity</span>
+                    <span class="value" id="val-slice-mouseSens">1.5</span>
+                  </div>
+                  <input type="range" id="slice-mouseSens" min="0.5" max="5.0" step="0.1" value="1.5">
+                </div>
+              </div>
+            </div>
+
+            <!-- Text Scramble Control Group -->
+            <div class="control-group pink-theme active" id="group-scramble">
+              <div class="control-header">
+                <label class="control-label">
+                  <span class="switch">
+                    <input type="checkbox" id="toggle-scramble" checked>
+                    <span class="slider-switch"></span>
+                  </span>
+                  Text Scramble
+                </label>
+                <span style="font-size: 0.7rem; color: var(--neon-pink);">[CHAR]</span>
+              </div>
+              <div class="sub-controls">
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Frequency</span>
+                    <span class="value" id="val-scramble-freq">0.20</span>
+                  </div>
+                  <input type="range" id="scramble-freq" min="0.05" max="1.00" step="0.05" value="0.20">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Scramble Intensity</span>
+                    <span class="value" id="val-scramble-chance">25%</span>
+                  </div>
+                  <input type="range" id="scramble-chance" min="5" max="80" step="5" value="25">
+                </div>
+              </div>
+            </div>
+
+            <!-- Shake Control Group -->
+            <div class="control-group cyan-theme" id="group-shake">
+              <div class="control-header">
+                <label class="control-label">
+                  <span class="switch cyan-switch">
+                    <input type="checkbox" id="toggle-shake">
+                    <span class="slider-switch"></span>
+                  </span>
+                  Vibration / Shake
+                </label>
+                <span style="font-size: 0.7rem; color: var(--neon-cyan);">[TRANS]</span>
+              </div>
+              <div class="sub-controls">
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Amplitude X</span>
+                    <span class="value" id="val-shake-x">6px</span>
+                  </div>
+                  <input type="range" id="shake-x" min="1" max="25" value="6">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Amplitude Y</span>
+                    <span class="value" id="val-shake-y">4px</span>
+                  </div>
+                  <input type="range" id="shake-y" min="1" max="25" value="4">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Frequency</span>
+                    <span class="value" id="val-shake-freq">0.40</span>
+                  </div>
+                  <input type="range" id="shake-freq" min="0.05" max="1.00" step="0.05" value="0.40">
+                </div>
+                <!-- Mouse speed integration -->
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 0.6rem; margin-bottom: 0.6rem;">
+                  <span style="font-size: 0.8rem; color: var(--text-secondary);">Scale with Mouse Speed:</span>
+                  <label class="switch cyan-switch" style="transform: scale(0.85);">
+                    <input type="checkbox" id="shake-mouseInteract">
+                    <span class="slider-switch"></span>
+                  </label>
+                </div>
+                <div class="slider-container" id="shake-mouseSens-container" style="display: none;">
+                  <div class="slider-info">
+                    <span>Mouse Sensitivity</span>
+                    <span class="value" id="val-shake-mouseSens">1.5</span>
+                  </div>
+                  <input type="range" id="shake-mouseSens" min="0.5" max="5.0" step="0.1" value="1.5">
+                </div>
+              </div>
+            </div>
+
+            <!-- Flicker Control Group -->
+            <div class="control-group pink-theme" id="group-flicker">
+              <div class="control-header">
+                <label class="control-label">
+                  <span class="switch">
+                    <input type="checkbox" id="toggle-flicker">
+                    <span class="slider-switch"></span>
+                  </span>
+                  Signal Flicker
+                </label>
+                <span style="font-size: 0.7rem; color: var(--neon-pink);">[OPAC]</span>
+              </div>
+              <div class="sub-controls">
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Min Opacity</span>
+                    <span class="value" id="val-flicker-opac">0.20</span>
+                  </div>
+                  <input type="range" id="flicker-opac" min="0.00" max="0.80" step="0.05" value="0.20">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Frequency</span>
+                    <span class="value" id="val-flicker-freq">0.15</span>
+                  </div>
+                  <input type="range" id="flicker-freq" min="0.05" max="1.00" step="0.05" value="0.15">
+                </div>
+              </div>
+            </div>
+
+            <!-- Scanline Control Group -->
+            <div class="control-group cyan-theme active" id="group-scanlines">
+              <div class="control-header">
+                <label class="control-label">
+                  <span class="switch cyan-switch">
+                    <input type="checkbox" id="toggle-scanlines" checked>
+                    <span class="slider-switch"></span>
+                  </span>
+                  CRT Scanlines
+                </label>
+                <span style="font-size: 0.7rem; color: var(--neon-cyan);">[OVER]</span>
+              </div>
+              <div class="sub-controls">
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Scanline Opacity</span>
+                    <span class="value" id="val-scanline-opac">0.12</span>
+                  </div>
+                  <input type="range" id="scanline-opac" min="0.02" max="0.40" step="0.02" value="0.12">
+                </div>
+                <div class="control-header" style="margin-top: 0.5rem; justify-content: flex-start; gap: 10px;">
+                  <span style="font-size: 0.8rem; color: var(--text-secondary);">Pulse Effect:</span>
+                  <label class="switch cyan-switch" style="transform: scale(0.85);">
+                    <input type="checkbox" id="scanline-pulse" checked>
+                    <span class="slider-switch"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+          </form>
+        </div>
+      </section>
+
+      <!-- Right Column: Live Showcase and Generated Code -->
+      <section class="display-column">
+        
+        <!-- Live Preview Board -->
+        <div class="card display-card cyan-theme">
+          <div class="preview-header">
+            <h2 class="card-title cyan-text" style="margin: 0; border: none; padding: 0;">PREVIEW_WORKSPACE</h2>
+            <div class="preview-tabs">
+              <button class="tab-btn active cyan-active" data-tab="terminal">Terminal</button>
+              <button class="tab-btn" data-tab="button">Button</button>
+              <button class="tab-btn" data-tab="portrait">Portrait</button>
+              <button class="tab-btn" data-tab="banner">Warning Banner</button>
+            </div>
+          </div>
+
+          <!-- Preview Viewport -->
+          <div class="preview-body" id="preview-viewport">
+            
+            <!-- 1. Terminal Showcase -->
+            <div class="showcase-content active" id="showcase-terminal">
+              <div class="terminal-container" id="glitch-target-terminal">
+                <div class="terminal-header">
+                  <div class="terminal-dot"></div>
+                  <div class="terminal-dot"></div>
+                  <div class="terminal-dot"></div>
+                  <div class="terminal-title">DECRYPT_STREAM_IP://192.168.84.2</div>
+                </div>
+                <div class="terminal-line cyan">> INITIALIZING DECRYPTION PROTOCOL...</div>
+                <div class="terminal-line green">> STACK OVERFLOW DETECTED IN SECTOR 7</div>
+                <div class="terminal-line">> BYPASSING FIREWALL STACKS... [94%]</div>
+                <div class="terminal-line pink">> SYSTEM ERROR: ACCESS DENIED // RUN CODES</div>
+              </div>
+            </div>
+
+            <!-- 2. Button Showcase -->
+            <div class="showcase-content" id="showcase-button">
+              <div class="holo-btn-container">
+                <button class="cyber-holo-btn" id="glitch-target-button">OVERRIDE CORE</button>
+              </div>
+            </div>
+
+            <!-- 3. Portrait Showcase -->
+            <div class="showcase-content" id="showcase-portrait">
+              <div class="portrait-container" id="glitch-target-portrait">
+                <img src="cyberpunk_portrait.png" alt="Cyberpunk Tech Portrait" class="portrait-image">
+              </div>
+            </div>
+
+            <!-- 4. Warning Banner Showcase -->
+            <div class="showcase-content" id="showcase-banner">
+              <div class="banner-container" id="glitch-target-banner">
+                <h3 class="banner-warning">CRITICAL SECURITY BREACH</h3>
+                <p class="banner-sub">SYS_TEMP_OVERHEAT_IN_04_SEC</p>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Playback Actions -->
+          <div class="playback-controls">
+            <div style="flex-grow: 1;">
+              <div>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">ACTIVE_TARGET:</span>
+                <span id="active-target-label" style="font-size: 0.8rem; color: var(--neon-cyan); margin-left: 0.5rem; font-weight: bold;">#glitch-target-terminal</span>
+              </div>
+              
+              <!-- Velocity Speedometer Bar -->
+              <div id="velocity-container" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; max-width: 380px;">
+                <span style="font-size: 0.7rem; color: var(--text-secondary); width: 110px; letter-spacing: 0.5px;">CURSOR_SPEED:</span>
+                <div class="velocity-bar-bg">
+                  <div id="velocity-bar-fill" class="velocity-bar-fill"></div>
+                </div>
+                <span id="velocity-value" style="font-size: 0.75rem; color: var(--neon-cyan); width: 45px; text-align: right; font-family: var(--font-mono);">0.00</span>
+              </div>
+            </div>
+            
+            <div class="playback-actions" style="align-self: flex-end;">
+              <button class="cyber-button cyan-btn" id="btn-manual-trigger" style="display: none; padding: 0.5rem 1rem; font-size: 0.8rem;">TRIGGER_GLITCH</button>
+              <button class="cyber-button" id="btn-toggle-play" style="padding: 0.5rem 1rem; font-size: 0.8rem;">STOP_ENGINE</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generated Code Snippet Exporter -->
+        <div class="card code-card">
+          <div class="code-header">
+            <h2 class="card-title pink-text" style="margin: 0; border: none; padding: 0;">INTEGRATION_SOURCE</h2>
+            <button class="copy-btn" id="btn-copy-code">COPY_CODE</button>
+          </div>
+          <pre class="code-pre"><code id="code-snippet-output"></code></pre>
+        </div>
+
+      </section>
+    </main>
+  </div>
+
+  <!-- JavaScript Setup -->
+  <script type="module" src="/src/playground.ts"></script>
+</body>
+</html>

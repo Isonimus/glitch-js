@@ -1,0 +1,46 @@
+{
+  "name": "glitch-js",
+  "version": "1.0.0",
+  "description": "A lightweight, dependency-free, vanilla JavaScript library for stackable DOM glitch effects.",
+  "type": "module",
+  "main": "./dist/lib/glitch.umd.js",
+  "module": "./dist/lib/glitch.es.js",
+  "types": "./dist/lib/glitch.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib/glitch.d.ts",
+      "import": "./dist/lib/glitch.es.js",
+      "require": "./dist/lib/glitch.umd.js"
+    }
+  },
+  "files": [
+    "dist/lib"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:lib": "vite build --config vite.config.lib.ts",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "glitch",
+    "distortion",
+    "dom",
+    "cyberpunk",
+    "rgb-split",
+    "text-scramble",
+    "scanlines"
+  ],
+  "author": "Iker Laforga",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "vite-plugin-dts": "^3.9.1",
+    "vitest": "^1.6.0",
+    "happy-dom": "^14.12.0",
+    "@vitest/coverage-v8": "^1.6.0"
+  }
+}

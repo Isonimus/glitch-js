@@ -1,0 +1,44 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # id-token: write is required for BOTH npm Trusted Publishing (OIDC auth
+      # to npm — no NPM_TOKEN secret needed) and npm provenance attestation.
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted Publishing requires npm >= 11.5.1
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Library
+        run: npm run build:lib
+
+      - name: Run Tests
+        run: npm run test
+
+      # No NODE_AUTH_TOKEN needed — Trusted Publishing exchanges the GitHub
+      # OIDC token for a short-lived npm publish token at publish time.
+      - name: Publish to npm
+        run: npm publish --access public --provenance
