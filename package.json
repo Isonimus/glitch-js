@@ -1,5 +1,5 @@
 {
-  "name": "glitch-js",
+  "name": "@isonimus/glitch-js",
   "version": "1.0.0",
   "description": "A lightweight, dependency-free, vanilla JavaScript library for stackable DOM glitch effects.",
   "type": "module",

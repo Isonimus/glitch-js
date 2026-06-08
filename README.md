@@ -21,7 +21,7 @@ A lightweight, dependency-free TypeScript library for applying stackable digital
 Install via npm:
 
 ```bash
-npm install glitch-js
+npm install @isonimus/glitch-js
 ```
 
 Or use it directly in the browser via ES modules (loading from your local build folder):
@@ -39,7 +39,7 @@ import { Glitch, Effects } from './dist/lib/glitch.es.js';
 Apply a hover-triggered text scramble and brightness flicker to any element (e.g., a button or heading):
 
 ```typescript
-import { Glitch, Effects } from 'glitch-js';
+import { Glitch, Effects } from '@isonimus/glitch-js';
 
 const heading = document.querySelector('.glitch-heading') as HTMLElement;
 
@@ -57,7 +57,7 @@ const glitch = new Glitch(heading, {
 Compose a combined RGB Split, CRT Scanline grid, and Slice Shift overlay:
 
 ```typescript
-import { Glitch, Effects } from 'glitch-js';
+import { Glitch, Effects } from '@isonimus/glitch-js';
 
 const terminal = document.querySelector('.terminal-view') as HTMLElement;
 
@@ -79,7 +79,7 @@ const controller = new Glitch(terminal, {
 Make the glitch effect intensify dynamically as the user moves their mouse cursor faster over the element:
 
 ```typescript
-import { Glitch, Effects } from 'glitch-js';
+import { Glitch, Effects } from '@isonimus/glitch-js';
 
 const card = document.querySelector('.hero-card') as HTMLElement;
 
