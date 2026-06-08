@@ -90,6 +90,30 @@ header::after {
   box-shadow: 0 0 10px var(--neon-cyan-glow);
 }
 
+.header-links {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 0.2rem;
+}
+
+.cyber-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+  border-bottom: 1px dashed transparent;
+  padding-bottom: 4px;
+}
+
+.cyber-link:hover {
+  color: var(--neon-pink);
+  text-shadow: 0 0 8px var(--neon-pink-glow);
+  border-bottom-color: var(--neon-pink);
+}
+
 .title-area h1 {
   font-family: var(--font-display);
   font-weight: 900;
