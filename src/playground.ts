@@ -364,6 +364,20 @@ const getGlitchOptionsFromUI = () => {
   };
 };
 
+// Helper: Escape HTML meta-characters to prevent DOM XSS alerts
+const escapeHtml = (str: string): string => {
+  return str.replace(/[&<>'"]/g, (tag) => {
+    const chars: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;',
+    };
+    return chars[tag] || tag;
+  });
+};
+
 // Helper: Re-generate and render code snippet block
 const updateCodeSnippet = (): void => {
   const opts = getGlitchOptionsFromUI();
@@ -376,13 +390,13 @@ const updateCodeSnippet = (): void => {
     effectsString += '  ]';
   }
 
-  const code = `<span class="keyword">import</span> { <span class="class-name">Glitch</span>, <span class="class-name">Effects</span> } <span class="keyword">from</span> <span class="string">'./glitch.js'</span>;
+  const code = `<span class="keyword">import</span> { <span class="class-name">Glitch</span>, <span class="class-name">Effects</span> } <span class="keyword">from</span> <span class="string">'@isonimus/glitch-js'</span>;
 
-<span class="keyword">const</span> target = <span class="keyword">document</span>.querySelector(<span class="string">'${targetSel}'</span>);
+<span class="keyword">const</span> target = <span class="keyword">document</span>.querySelector(<span class="string">'${escapeHtml(targetSel)}'</span>);
 <span class="keyword">const</span> glitcher = <span class="keyword">new</span> <span class="class-name">Glitch</span>(target, {
-  <span class="property">trigger</span>: <span class="string">'${opts.trigger}'</span>,
+  <span class="property">trigger</span>: <span class="string">'${escapeHtml(opts.trigger)}'</span>,
   <span class="property">active</span>: <span class="number">${opts.active}</span>,
-  <span class="property">effects</span>: ${effectsString}
+  <span class="property">effects</span>: ${escapeHtml(effectsString)}
 });`;
 
   elements.codeSnippetOutput.innerHTML = code;
