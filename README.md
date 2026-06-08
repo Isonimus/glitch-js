@@ -24,16 +24,52 @@ A lightweight, dependency-free TypeScript library for applying stackable digital
 
 ## Installation
 
+### Package Manager
 Install via npm:
 
 ```bash
 npm install @isonimus/glitch-js
 ```
 
-Or use it directly in the browser via ES modules (loading from your local build folder):
+Then import it into your build files:
 
-```javascript
-import { Glitch, Effects } from './dist/lib/glitch.es.js';
+```typescript
+import { Glitch, Effects } from '@isonimus/glitch-js';
+```
+
+### CDN / Direct Browser Import
+For static sites, quick prototyping, or simple HTML projects, you can load the library directly from a CDN without any bundle configuration:
+
+#### Option A: ES Modules (Recommended)
+Import the library inside a `<script type="module">` block using [jsDelivr](https://www.jsdelivr.com/) or [esm.sh](https://esm.sh/):
+
+```html
+<script type="module">
+  import { Glitch, Effects } from 'https://cdn.jsdelivr.net/npm/@isonimus/glitch-js@1.0.2/dist/lib/glitch.es.js';
+
+  const element = document.querySelector('.glitch-title');
+  new Glitch(element, {
+    effects: [Effects.rgbSplit()]
+  });
+</script>
+```
+
+#### Option B: Classical Script Tag (UMD Global)
+Include the script tag, which exposes the library globally under the `window.Glitch` namespace:
+
+```html
+<!-- Load UMD bundle -->
+<script src="https://cdn.jsdelivr.net/npm/@isonimus/glitch-js@1.0.2/dist/lib/glitch.umd.js"></script>
+
+<script>
+  // Destructure from the global Glitch object
+  const { Glitch, Effects } = window.Glitch;
+
+  const element = document.querySelector('.glitch-title');
+  new Glitch(element, {
+    effects: [Effects.flicker()]
+  });
+</script>
 ```
 
 ---
