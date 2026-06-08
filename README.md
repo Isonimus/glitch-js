@@ -2,6 +2,8 @@
 
 A lightweight, dependency-free TypeScript library for applying stackable digital distortion and glitch effects to standard HTML/DOM elements. Built with GPU-accelerated SVG matrix filters, performance-optimized render loops, strict type safety, and interactive triggers.
 
+🔗 **[Live Playground / Interactive Demo](https://isonimus.github.io/glitch-js/)**
+
 ---
 
 ## Features
