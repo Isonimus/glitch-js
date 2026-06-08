@@ -1,6 +1,6 @@
 {
   "name": "@isonimus/glitch-js",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A lightweight, dependency-free, vanilla JavaScript library for stackable DOM glitch effects.",
   "type": "module",
   "main": "./dist/lib/glitch.umd.js",
@@ -16,6 +16,10 @@
   "files": [
     "dist/lib"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Isonimus/glitch-js.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
