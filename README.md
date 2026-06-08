@@ -1,5 +1,9 @@
 # Glitch.js
 
+[![CI Status](https://github.com/Isonimus/glitch-js/actions/workflows/ci.yml/badge.svg)](https://github.com/Isonimus/glitch-js/actions/workflows/ci.yml)
+[![NPM Version](https://img.shields.io/npm/v/@isonimus/glitch-js.svg?style=flat-square)](https://www.npmjs.com/package/@isonimus/glitch-js)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+
 A lightweight, dependency-free TypeScript library for applying stackable digital distortion and glitch effects to standard HTML/DOM elements. Built with GPU-accelerated SVG matrix filters, performance-optimized render loops, strict type safety, and interactive triggers.
 
 🔗 **[Live Playground / Interactive Demo](https://isonimus.github.io/glitch-js/)**
