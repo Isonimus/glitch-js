@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-01
+
+### Added
+- **Hologram Effect**: New `Effects.hologram()` module renders elements as a cinematic sci-fi projection — a semitransparent, color-tinted layer with a sweeping interference band, faint holographic banding, gentle vertical hovering, and intermittent glitch flashes. Configurable via `color`, `opacity`, `glowIntensity`, `scanSpeed`, `flickerFrequency`, and `floatAmplitude` (`HologramOptions`).
+- **Playground Hologram Controls**: Added a Hologram Projection control group (color picker + sliders) to the interactive playground, and reworked the "Broken Holo" preset to showcase the new effect.
+- **Documentation**: Added the `Effects.hologram()` API reference and a cinematic hologram usage example to the README.
+
 ## [1.0.3] - 2026-06-08
 
 ### Added

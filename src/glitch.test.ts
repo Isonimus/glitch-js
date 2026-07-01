@@ -235,4 +235,33 @@ describe('Glitch.js Built-in Effects factories', () => {
     expect(typeof fx.setup).toBe('function');
     expect(typeof fx.cleanup).toBe('function');
   });
+
+  it('should create hologram effect structure', () => {
+    const fx = Effects.hologram();
+    expect(fx.name).toBe('hologram');
+    expect(typeof fx.setup).toBe('function');
+    expect(typeof fx.update).toBe('function');
+    expect(typeof fx.cleanup).toBe('function');
+  });
+
+  it('should inject and clean up hologram overlays with a configurable color', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    const glitch = new Glitch(container, {
+      effects: [Effects.hologram({ color: 'rgb(255, 0, 128)', opacity: 0.7 })],
+    });
+
+    const tint = container.querySelector('.hologram-tint') as HTMLElement;
+    const scan = container.querySelector('.hologram-scan') as HTMLElement;
+    expect(tint).not.toBeNull();
+    expect(scan).not.toBeNull();
+    expect(tint.style.background).toContain('rgb(255, 0, 128)');
+
+    glitch.destroy();
+    expect(container.querySelector('.hologram-tint')).toBeNull();
+    expect(container.querySelector('.hologram-scan')).toBeNull();
+
+    container.remove();
+  });
 });

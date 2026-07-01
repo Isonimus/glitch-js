@@ -37,6 +37,7 @@ interface Elements {
   enableShake: HTMLInputElement;
   enableFlicker: HTMLInputElement;
   enableScanlines: HTMLInputElement;
+  enableHologram: HTMLInputElement;
 
   // Effect Slider Configurations
   rgbOffset: HTMLInputElement;
@@ -64,6 +65,13 @@ interface Elements {
 
   scanlineOpac: HTMLInputElement;
   scanlinePulse: HTMLInputElement;
+
+  hologramColor: HTMLInputElement;
+  hologramOpacity: HTMLInputElement;
+  hologramGlow: HTMLInputElement;
+  hologramScanSpeed: HTMLInputElement;
+  hologramFlicker: HTMLInputElement;
+  hologramFloat: HTMLInputElement;
 
   // Control Group Panels
   groups: Record<string, HTMLElement>;
@@ -97,6 +105,7 @@ const elements: Elements = {
   enableShake: document.getElementById('toggle-shake') as HTMLInputElement,
   enableFlicker: document.getElementById('toggle-flicker') as HTMLInputElement,
   enableScanlines: document.getElementById('toggle-scanlines') as HTMLInputElement,
+  enableHologram: document.getElementById('toggle-hologram') as HTMLInputElement,
 
   rgbOffset: document.getElementById('rgb-offset') as HTMLInputElement,
   rgbFreq: document.getElementById('rgb-freq') as HTMLInputElement,
@@ -124,6 +133,13 @@ const elements: Elements = {
   scanlineOpac: document.getElementById('scanline-opac') as HTMLInputElement,
   scanlinePulse: document.getElementById('scanline-pulse') as HTMLInputElement,
 
+  hologramColor: document.getElementById('hologram-color') as HTMLInputElement,
+  hologramOpacity: document.getElementById('hologram-opacity') as HTMLInputElement,
+  hologramGlow: document.getElementById('hologram-glow') as HTMLInputElement,
+  hologramScanSpeed: document.getElementById('hologram-scanSpeed') as HTMLInputElement,
+  hologramFlicker: document.getElementById('hologram-flicker') as HTMLInputElement,
+  hologramFloat: document.getElementById('hologram-float') as HTMLInputElement,
+
   groups: {
     rgbSplit: document.getElementById('group-rgbSplit') as HTMLElement,
     slice: document.getElementById('group-slice') as HTMLElement,
@@ -131,6 +147,7 @@ const elements: Elements = {
     shake: document.getElementById('group-shake') as HTMLElement,
     flicker: document.getElementById('group-flicker') as HTMLElement,
     scanlines: document.getElementById('group-scanlines') as HTMLElement,
+    hologram: document.getElementById('group-hologram') as HTMLElement,
   },
 };
 
@@ -142,6 +159,7 @@ interface Preset {
   shake: { active: boolean; x: number; y: number; freq: number; mouseInteract: boolean; mouseSens: number };
   flicker: { active: boolean; opac: number; freq: number };
   scanlines: { active: boolean; opac: number; pulse: boolean };
+  hologram: { active: boolean; color: string; opacity: number; glow: number; scanSpeed: number; flicker: number; float: number };
 }
 
 // Preset Data Store
@@ -154,15 +172,17 @@ const presetsData: Record<string, Preset> = {
     shake: { active: false, x: 6, y: 4, freq: 0.4, mouseInteract: false, mouseSens: 1.5 },
     flicker: { active: false, opac: 0.2, freq: 0.15 },
     scanlines: { active: true, opac: 0.2, pulse: true },
+    hologram: { active: false, color: '#00d9ff', opacity: 0.85, glow: 0.5, scanSpeed: 1, flicker: 0.08, float: 3 },
   },
   holo: {
     trigger: 'always',
-    rgb: { active: true, offset: 10, freq: 0.35, blend: 'screen', mouseInteract: true, mouseSens: 2.0 },
-    slice: { active: true, offset: 20, freq: 0.25, mouseInteract: true, mouseSens: 1.8 },
+    rgb: { active: true, offset: 4, freq: 0.15, blend: 'screen', mouseInteract: true, mouseSens: 2.0 },
+    slice: { active: false, offset: 20, freq: 0.25, mouseInteract: true, mouseSens: 1.8 },
     scramble: { active: false, freq: 0.2, chance: 0.25 },
-    shake: { active: true, x: 6, y: 3, freq: 0.3, mouseInteract: true, mouseSens: 1.5 },
-    flicker: { active: true, opac: 0.4, freq: 0.25 },
-    scanlines: { active: false, opac: 0.12, pulse: true },
+    shake: { active: false, x: 6, y: 3, freq: 0.3, mouseInteract: true, mouseSens: 1.5 },
+    flicker: { active: false, opac: 0.4, freq: 0.25 },
+    scanlines: { active: true, opac: 0.12, pulse: true },
+    hologram: { active: true, color: '#00d9ff', opacity: 0.82, glow: 0.6, scanSpeed: 1.2, flicker: 0.1, float: 4 },
   },
   failure: {
     trigger: 'always',
@@ -172,6 +192,7 @@ const presetsData: Record<string, Preset> = {
     shake: { active: true, x: 4, y: 2, freq: 0.2, mouseInteract: false, mouseSens: 1.5 },
     flicker: { active: true, opac: 0.05, freq: 0.45 },
     scanlines: { active: true, opac: 0.15, pulse: true },
+    hologram: { active: false, color: '#00d9ff', opacity: 0.85, glow: 0.5, scanSpeed: 1, flicker: 0.08, float: 3 },
   },
   subtle: {
     trigger: 'hover',
@@ -181,6 +202,7 @@ const presetsData: Record<string, Preset> = {
     shake: { active: false, x: 6, y: 4, freq: 0.4, mouseInteract: false, mouseSens: 1.5 },
     flicker: { active: false, opac: 0.2, freq: 0.15 },
     scanlines: { active: false, opac: 0.12, pulse: true },
+    hologram: { active: false, color: '#00d9ff', opacity: 0.85, glow: 0.5, scanSpeed: 1, flicker: 0.08, float: 3 },
   },
 };
 
@@ -228,6 +250,15 @@ const applyPresetToUI = (presetKey: string): void => {
   elements.enableScanlines.checked = p.scanlines.active;
   elements.scanlineOpac.value = p.scanlines.opac.toString();
   elements.scanlinePulse.checked = p.scanlines.pulse;
+
+  // Hologram
+  elements.enableHologram.checked = p.hologram.active;
+  elements.hologramColor.value = p.hologram.color;
+  elements.hologramOpacity.value = p.hologram.opacity.toString();
+  elements.hologramGlow.value = p.hologram.glow.toString();
+  elements.hologramScanSpeed.value = p.hologram.scanSpeed.toString();
+  elements.hologramFlicker.value = p.hologram.flicker.toString();
+  elements.hologramFloat.value = p.hologram.float.toString();
 
   // Show/hide sensitivity sliders
   const rgbSensCont = document.getElementById('rgb-mouseSens-container');
@@ -299,6 +330,21 @@ const updateUIValues = (): void => {
 
   const valScanlineOpac = document.getElementById('val-scanline-opac');
   if (valScanlineOpac) valScanlineOpac.textContent = parseFloat(elements.scanlineOpac.value).toFixed(2);
+
+  const valHoloOpacity = document.getElementById('val-hologram-opacity');
+  if (valHoloOpacity) valHoloOpacity.textContent = parseFloat(elements.hologramOpacity.value).toFixed(2);
+
+  const valHoloGlow = document.getElementById('val-hologram-glow');
+  if (valHoloGlow) valHoloGlow.textContent = parseFloat(elements.hologramGlow.value).toFixed(2);
+
+  const valHoloScanSpeed = document.getElementById('val-hologram-scanSpeed');
+  if (valHoloScanSpeed) valHoloScanSpeed.textContent = parseFloat(elements.hologramScanSpeed.value).toFixed(1);
+
+  const valHoloFlicker = document.getElementById('val-hologram-flicker');
+  if (valHoloFlicker) valHoloFlicker.textContent = parseFloat(elements.hologramFlicker.value).toFixed(2);
+
+  const valHoloFloat = document.getElementById('val-hologram-float');
+  if (valHoloFloat) valHoloFloat.textContent = `${elements.hologramFloat.value}px`;
 };
 
 // Helper: Get active targets string for UI labels
@@ -354,6 +400,12 @@ const getGlitchOptionsFromUI = () => {
   if (elements.enableScanlines.checked) {
     activeEffects.push(
       `    Effects.scanlines({\n      opacity: ${elements.scanlineOpac.value},\n      pulse: ${elements.scanlinePulse.checked}\n    })`
+    );
+  }
+
+  if (elements.enableHologram.checked) {
+    activeEffects.push(
+      `    Effects.hologram({\n      color: '${elements.hologramColor.value}',\n      opacity: ${elements.hologramOpacity.value},\n      glowIntensity: ${elements.hologramGlow.value},\n      scanSpeed: ${elements.hologramScanSpeed.value},\n      flickerFrequency: ${elements.hologramFlicker.value},\n      floatAmplitude: ${elements.hologramFloat.value}\n    })`
     );
   }
 
@@ -477,6 +529,18 @@ const updateGlitchInstance = (): void => {
       Effects.scanlines({
         opacity: parseFloat(elements.scanlineOpac.value),
         pulse: elements.scanlinePulse.checked,
+      })
+    );
+  }
+  if (elements.enableHologram.checked) {
+    realEffects.push(
+      Effects.hologram({
+        color: elements.hologramColor.value,
+        opacity: parseFloat(elements.hologramOpacity.value),
+        glowIntensity: parseFloat(elements.hologramGlow.value),
+        scanSpeed: parseFloat(elements.hologramScanSpeed.value),
+        flickerFrequency: parseFloat(elements.hologramFlicker.value),
+        floatAmplitude: parseInt(elements.hologramFloat.value),
       })
     );
   }
