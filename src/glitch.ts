@@ -60,6 +60,15 @@ export interface ScanlinesOptions {
   pulse?: boolean;
 }
 
+export interface HologramOptions {
+  color?: string;
+  opacity?: number;
+  glowIntensity?: number;
+  scanSpeed?: number;
+  flickerFrequency?: number;
+  floatAmplitude?: number;
+}
+
 // Helper to ensure the custom SVG filters for RGB Split are injected into the document body
 const ensureSvgFilters = (): void => {
   if (document.getElementById('glitch-svg-filters')) return;
@@ -811,6 +820,129 @@ export const Effects = {
         if (instance.overlays.scanlines) {
           instance.overlays.scanlines.remove();
           delete instance.overlays.scanlines;
+        }
+      },
+    };
+  },
+
+  /**
+   * Hologram Effect
+   * Renders the element as a cinematic sci-fi projection: a semitransparent,
+   * color-tinted layer with a sweeping interference band, faint holo banding,
+   * gentle vertical hovering, and intermittent glitch flashes.
+   */
+  hologram(options: HologramOptions = {}): GlitchEffect {
+    const opts = {
+      color: '#00d9ff',
+      opacity: 0.85,
+      glowIntensity: 0.5,
+      scanSpeed: 1,
+      flickerFrequency: 0.08,
+      floatAmplitude: 3,
+      ...options,
+    };
+
+    return {
+      name: 'hologram',
+      setup(instance) {
+        // Color tint + faint horizontal holo banding, blended over the element
+        const tint = document.createElement('div');
+        tint.classList.add('glitch-overlay', 'hologram-tint');
+        tint.style.position = 'absolute';
+        tint.style.top = '0';
+        tint.style.left = '0';
+        tint.style.width = '100%';
+        tint.style.height = '100%';
+        tint.style.pointerEvents = 'none';
+        tint.style.zIndex = '9998';
+        tint.style.boxSizing = 'border-box';
+        tint.style.background = opts.color;
+        tint.style.backgroundImage =
+          'repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0px, rgba(255, 255, 255, 0.06) 1px, transparent 1px, transparent 3px)';
+        tint.style.mixBlendMode = 'screen';
+        tint.style.opacity = (opts.glowIntensity * 0.5).toString();
+        tint.style.boxShadow = `0 0 ${12 * opts.glowIntensity}px ${opts.color}`;
+        instance.element.appendChild(tint);
+        instance.overlays.hologramTint = tint;
+
+        // Bright sweeping interference band that scans vertically.
+        // Wrapped in a clipped, full-size container so the band never spills
+        // outside the element (the host itself stays un-clipped so effects like
+        // rgbSplit/slice can still translate their clones beyond the bounds).
+        const scanWrap = document.createElement('div');
+        scanWrap.classList.add('glitch-overlay', 'hologram-scan');
+        scanWrap.style.position = 'absolute';
+        scanWrap.style.top = '0';
+        scanWrap.style.left = '0';
+        scanWrap.style.width = '100%';
+        scanWrap.style.height = '100%';
+        scanWrap.style.pointerEvents = 'none';
+        scanWrap.style.overflow = 'hidden';
+        scanWrap.style.zIndex = '9999';
+
+        const scan = document.createElement('div');
+        scan.classList.add('hologram-scan-band');
+        scan.style.position = 'absolute';
+        scan.style.left = '0';
+        scan.style.top = '0';
+        scan.style.width = '100%';
+        scan.style.height = '14%';
+        scan.style.background = `linear-gradient(transparent, ${opts.color}, transparent)`;
+        scan.style.opacity = '0.25';
+        scan.style.mixBlendMode = 'screen';
+        scanWrap.appendChild(scan);
+
+        instance.element.appendChild(scanWrap);
+        instance.overlays.hologramScan = scanWrap;
+      },
+      update(instance, time) {
+        // Gentle vertical hover using a smooth sine wave
+        const float = Math.sin(time / 600) * opts.floatAmplitude;
+
+        // Sweeping band loops from above the top to below the bottom (clipped
+        // by its overflow-hidden wrapper).
+        const sweep = (((time * 0.03 * opts.scanSpeed) % 130) + 130) % 130 - 15;
+        const scanBand = instance.overlays.hologramScan?.firstElementChild as HTMLElement | null;
+        if (scanBand) {
+          scanBand.style.top = `${sweep}%`;
+        }
+
+        // Intermittent glitch flash: horizontal jump, skew, and dropout
+        if (Math.random() < opts.flickerFrequency) {
+          const jump = (Math.random() - 0.5) * 6;
+          const skew = (Math.random() - 0.5) * 3;
+          instance.element.style.transform = `translate(${jump}px, ${float}px) skewX(${skew}deg)`;
+          instance.element.style.opacity = (opts.opacity * (Math.random() * 0.5 + 0.4)).toString();
+          if (instance.overlays.hologramTint) {
+            instance.overlays.hologramTint.style.transform = `translateX(${jump * 0.5}px)`;
+          }
+        } else {
+          instance.element.style.transform = `translateY(${float}px)`;
+          instance.element.style.opacity = opts.opacity.toString();
+          if (instance.overlays.hologramTint) {
+            instance.overlays.hologramTint.style.transform = '';
+          }
+        }
+      },
+      reset(instance) {
+        instance.element.style.transform = '';
+        instance.element.style.opacity = '';
+        if (instance.overlays.hologramTint) {
+          instance.overlays.hologramTint.style.transform = '';
+        }
+        const scanBand = instance.overlays.hologramScan?.firstElementChild as HTMLElement | null;
+        if (scanBand) {
+          scanBand.style.top = '0';
+        }
+      },
+      cleanup(instance) {
+        if (instance.overlays.hologramTint) {
+          instance.overlays.hologramTint.remove();
+          delete instance.overlays.hologramTint;
+        }
+        if (instance.overlays.hologramScan) {
+          instance.overlays.hologramScan.remove();
+          delete instance.overlays.hologramScan;
         }
       },
     };

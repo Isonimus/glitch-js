@@ -14,7 +14,7 @@
     <header>
       <div class="title-area">
         <h1>GLITCH.JS</h1>
-        <p>MODULAR DOM DISTORTION ENGINE // VER_1.0.0</p>
+        <p>MODULAR DOM DISTORTION ENGINE // VER_1.1.0</p>
       </div>
       <div class="header-links">
         <a href="https://github.com/Isonimus/glitch-js" target="_blank" class="cyber-link">GITHUB_REPO</a>
@@ -306,6 +306,61 @@
                     <input type="checkbox" id="scanline-pulse" checked>
                     <span class="slider-switch"></span>
                   </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hologram Control Group -->
+            <div class="control-group cyan-theme" id="group-hologram">
+              <div class="control-header">
+                <label class="control-label">
+                  <span class="switch cyan-switch">
+                    <input type="checkbox" id="toggle-hologram">
+                    <span class="slider-switch"></span>
+                  </span>
+                  Hologram Projection
+                </label>
+                <span style="font-size: 0.7rem; color: var(--neon-cyan);">[HOLO]</span>
+              </div>
+              <div class="sub-controls">
+                <div class="control-header" style="margin-top: 0.25rem; margin-bottom: 0.5rem; justify-content: flex-start; gap: 10px;">
+                  <span style="font-size: 0.8rem; color: var(--text-secondary);">Projection Color:</span>
+                  <input type="color" id="hologram-color" value="#00d9ff" style="width: 40px; height: 26px; background: transparent; border: 1px solid var(--neon-cyan); cursor: pointer; padding: 0;">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Transparency</span>
+                    <span class="value" id="val-hologram-opacity">0.85</span>
+                  </div>
+                  <input type="range" id="hologram-opacity" min="0.20" max="1.00" step="0.05" value="0.85">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Glow Intensity</span>
+                    <span class="value" id="val-hologram-glow">0.50</span>
+                  </div>
+                  <input type="range" id="hologram-glow" min="0.00" max="1.00" step="0.05" value="0.50">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Scan Speed</span>
+                    <span class="value" id="val-hologram-scanSpeed">1.0</span>
+                  </div>
+                  <input type="range" id="hologram-scanSpeed" min="0.0" max="4.0" step="0.1" value="1.0">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Flicker Frequency</span>
+                    <span class="value" id="val-hologram-flicker">0.08</span>
+                  </div>
+                  <input type="range" id="hologram-flicker" min="0.00" max="0.50" step="0.01" value="0.08">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Float Amplitude</span>
+                    <span class="value" id="val-hologram-float">3px</span>
+                  </div>
+                  <input type="range" id="hologram-float" min="0" max="15" step="1" value="3">
                 </div>
               </div>
             </div>

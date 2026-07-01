@@ -12,7 +12,7 @@ A lightweight, dependency-free TypeScript library for applying stackable digital
 
 ## Features
 
-- **Stackable & Composeable**: Combine RGB split, slice shifting, text scramble, container shaking, opacity flickers, and CRT scanlines on a single DOM element.
+- **Stackable & Composeable**: Combine RGB split, slice shifting, text scramble, container shaking, opacity flickers, CRT scanlines, and cinematic hologram projection on a single DOM element.
 - **Performance First**: Leverages GPU-accelerated SVG color matrix filters and CSS transforms running inside a `requestAnimationFrame` render loop.
 - **Event-Driven Sync**: Uses `MutationObserver` to automatically sync text changes and DOM updates from your main application into the glitch overlays without polling overhead.
 - **Scroll-Visibility Triggers**: Native `IntersectionObserver` support allows triggering glitch effects only when elements scroll into view.
@@ -145,6 +145,32 @@ const mouseGlitch = new Glitch(card, {
 });
 ```
 
+### 4. Cinematic Hologram Projection
+
+Turn any element (portrait, card, heading) into a semitransparent sci-fi hologram with a sweeping interference band and gentle hover:
+
+```typescript
+import { Glitch, Effects } from '@isonimus/glitch-js';
+
+const portrait = document.querySelector('.avatar') as HTMLElement;
+
+const hologram = new Glitch(portrait, {
+  trigger: 'always',
+  effects: [
+    Effects.hologram({
+      color: '#00d9ff',        // Projection tint & glow
+      opacity: 0.82,           // Base transparency
+      glowIntensity: 0.6,      // Strength of tint and outer glow
+      scanSpeed: 1.2,          // Interference band sweep speed
+      flickerFrequency: 0.1,   // Chance of a glitch flash per frame
+      floatAmplitude: 4        // Vertical hover in pixels
+    }),
+    // Optional: layer scanlines for extra CRT texture
+    Effects.scanlines({ opacity: 0.12, pulse: true })
+  ]
+});
+```
+
 ---
 
 ## API Reference
@@ -216,6 +242,16 @@ Overlays custom grid lines resembling retro CRT terminal monitors.
 
 - `opacity` (`number`, default: `0.12`): Base opacity of the scanline overlay.
 - `pulse` (`boolean`, default: `true`): Enable to animate the scanlines with a heartbeat/sine opacity cycle.
+
+### `Effects.hologram(options?: HologramOptions)`
+Renders the element as a cinematic sci-fi projection: a semitransparent, color-tinted layer with a sweeping interference band, faint holographic banding, gentle vertical hovering, and intermittent glitch flashes.
+
+- `color` (`string`, default: `'#00d9ff'`): Projection tint and glow color (any CSS color).
+- `opacity` (`number`, default: `0.85`): Base transparency of the projected element.
+- `glowIntensity` (`number`, default: `0.5`): Strength of the color tint and outer glow.
+- `scanSpeed` (`number`, default: `1`): Speed of the vertically sweeping interference band.
+- `flickerFrequency` (`number`, default: `0.08`): Chance per frame of a glitch/interference flash.
+- `floatAmplitude` (`number`, default: `3`): Pixel amplitude of the gentle vertical hover.
 
 ---
 
