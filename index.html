@@ -365,6 +365,52 @@
               </div>
             </div>
 
+            <!-- Decrypt Reveal Control Group -->
+            <div class="control-group pink-theme" id="group-decrypt">
+              <div class="control-header">
+                <label class="control-label">
+                  <span class="switch">
+                    <input type="checkbox" id="toggle-decrypt">
+                    <span class="slider-switch"></span>
+                  </span>
+                  Decrypt Reveal
+                </label>
+                <span style="font-size: 0.7rem; color: var(--neon-pink);">[DCRY]</span>
+              </div>
+              <div class="sub-controls">
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Duration</span>
+                    <span class="value" id="val-decrypt-duration">2000ms</span>
+                  </div>
+                  <input type="range" id="decrypt-duration" min="200" max="5000" step="100" value="2000">
+                </div>
+                <div class="slider-container">
+                  <div class="slider-info">
+                    <span>Roll Interval</span>
+                    <span class="value" id="val-decrypt-roll">50ms</span>
+                  </div>
+                  <input type="range" id="decrypt-roll" min="10" max="200" step="10" value="50">
+                </div>
+                <div>
+                  <span style="font-size: 0.8rem; color: var(--text-secondary);">Reveal Order:</span>
+                  <select id="decrypt-order" class="cyber-select" style="margin-left: 0.5rem; margin-bottom: 0.5rem;">
+                    <option value="forward" selected>Left to right</option>
+                    <option value="random">Random</option>
+                  </select>
+                </div>
+                <!-- Mask whitespace -->
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 0.6rem; margin-bottom: 0.6rem;">
+                  <span style="font-size: 0.8rem; color: var(--text-secondary);">Mask Spaces:</span>
+                  <label class="switch" style="transform: scale(0.85);">
+                    <input type="checkbox" id="decrypt-mask-whitespace" checked>
+                    <span class="slider-switch"></span>
+                  </label>
+                </div>
+                <button class="cyber-button" id="btn-decrypt-replay" style="padding: 0.5rem 1rem; font-size: 0.8rem; margin-top: 0.4rem;">Replay Reveal</button>
+              </div>
+            </div>
+
           </form>
         </div>
       </section>

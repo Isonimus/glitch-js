@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Glitch, Effects } from './glitch.ts';
+import type { GlitchEffect } from './glitch.ts';
 
 describe('Glitch.js Core Engine', () => {
   let container: HTMLDivElement;
@@ -263,5 +264,332 @@ describe('Glitch.js Built-in Effects factories', () => {
     expect(container.querySelector('.hologram-scan')).toBeNull();
 
     container.remove();
+  });
+});
+
+describe('Glitch.js managed text', () => {
+  let container: HTMLDivElement;
+  let rafSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    // Keep the animation loop from advancing on its own so that effects can be
+    // driven with explicit timestamps.
+    rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+  });
+
+  afterEach(() => {
+    rafSpy.mockRestore();
+    container.remove();
+  });
+
+  it('should read text across inline markup as one logical string', () => {
+    container.innerHTML = 'Neo <span>Tokyo</span>';
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+
+    const managed = glitch.readManagedText();
+    expect(managed.original).toBe('Neo Tokyo');
+    expect(managed.nodes.length).toBe(2);
+    expect(managed.lengths).toEqual([4, 5]);
+
+    glitch.destroy();
+  });
+
+  it('should split a transformed string back across the original nodes', () => {
+    container.innerHTML = 'Neo <span>Tokyo</span>';
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+
+    const managed = glitch.readManagedText();
+    glitch.writeManagedText(managed, '#########');
+
+    expect(container.textContent).toBe('#########');
+    expect(managed.nodes[0].nodeValue).toBe('####');
+    expect(managed.nodes[1].nodeValue).toBe('#####');
+
+    glitch.restoreManagedText();
+    expect(container.textContent).toBe('Neo Tokyo');
+
+    glitch.destroy();
+  });
+
+  it('should reject a managed text write of the wrong length', () => {
+    container.innerHTML = 'Cyberpunk';
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+
+    const managed = glitch.readManagedText();
+    expect(() => glitch.writeManagedText(managed, 'short')).toThrow(/does not match/);
+
+    glitch.destroy();
+  });
+
+  it('should never rewrite the text of script or style elements', () => {
+    container.innerHTML = '<style>.a{color:red}</style>Cyberpunk';
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+
+    const managed = glitch.readManagedText();
+    expect(managed.original).toBe('Cyberpunk');
+
+    glitch.writeManagedText(managed, '#########');
+    expect(container.querySelector('style')?.textContent).toBe('.a{color:red}');
+
+    glitch.destroy();
+  });
+
+  it('should mirror text into clones without rebuilding their markup', async () => {
+    container.innerHTML = 'Cyberpunk';
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+    glitch.createClones(1);
+
+    const clone = glitch.clones[0];
+    const cloneTextNodeBefore = clone.firstChild;
+    const syncSpy = vi.spyOn(glitch, 'syncClones');
+
+    const managed = glitch.readManagedText();
+    glitch.writeManagedText(managed, '#########');
+
+    // Let any MutationObserver records queued by our own write be delivered.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(clone.textContent).toBe('#########');
+    // A rebuild would replace the clone's text node and lose its identity.
+    expect(clone.firstChild).toBe(cloneTextNodeBefore);
+    expect(syncSpy).not.toHaveBeenCalled();
+
+    syncSpy.mockRestore();
+    glitch.destroy();
+  });
+
+  it('should still rebuild clones when the content changes externally', async () => {
+    container.innerHTML = 'Cyberpunk';
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+    glitch.createClones(1);
+
+    const syncSpy = vi.spyOn(glitch, 'syncClones');
+    container.innerHTML = 'Neo Tokyo';
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(syncSpy).toHaveBeenCalled();
+    expect(glitch.clones[0].textContent).toBe('Neo Tokyo');
+
+    syncSpy.mockRestore();
+    glitch.destroy();
+  });
+});
+
+describe('Glitch.js decrypt effect', () => {
+  let container: HTMLDivElement;
+  let rafSpy: ReturnType<typeof vi.spyOn>;
+
+  // A single-character pool makes every masked position deterministic, so the
+  // assertions describe the reveal timeline rather than a random draw.
+  const MASK = '#';
+
+  const driveUpdate = (effect: GlitchEffect, glitch: Glitch, time: number): void => {
+    if (!effect.update) throw new Error('decrypt effect must expose an update hook');
+    effect.update(glitch, time);
+  };
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+  });
+
+  afterEach(() => {
+    rafSpy.mockRestore();
+    container.remove();
+  });
+
+  it('should create decrypt effect structure', () => {
+    const fx = Effects.decrypt();
+    expect(fx.name).toBe('decrypt');
+    expect(typeof fx.update).toBe('function');
+    expect(typeof fx.reset).toBe('function');
+  });
+
+  it('should mask the whole text before any position locks', () => {
+    container.innerHTML = 'Cyberpunk';
+    const fx = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+
+    expect(container.textContent).toBe('#########');
+    glitch.destroy();
+  });
+
+  it('should lock characters left to right as the timeline advances', () => {
+    container.innerHTML = 'Cyberpunk';
+    const fx = Effects.decrypt({
+      characters: MASK,
+      duration: 900,
+      rollInterval: 0,
+      revealOrder: 'forward',
+    });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+    driveUpdate(fx, glitch, 300);
+    expect(container.textContent).toBe('Cyb######');
+
+    driveUpdate(fx, glitch, 600);
+    expect(container.textContent).toBe('Cyberp###');
+
+    glitch.destroy();
+  });
+
+  it('should reveal the exact original text once and then stop working', () => {
+    container.innerHTML = 'Cyberpunk';
+    const onComplete = vi.fn();
+    const fx = Effects.decrypt({
+      characters: MASK,
+      duration: 900,
+      rollInterval: 0,
+      onComplete,
+    });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+    driveUpdate(fx, glitch, 900);
+
+    expect(container.textContent).toBe('Cyberpunk');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+
+    driveUpdate(fx, glitch, 1500);
+    expect(container.textContent).toBe('Cyberpunk');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+
+    glitch.destroy();
+  });
+
+  it('should mask inline spaces by default and preserve them when asked', () => {
+    container.innerHTML = 'Neo Tokyo';
+    const masked = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [masked] });
+
+    driveUpdate(masked, glitch, 0);
+    expect(container.textContent).toBe('#########');
+    glitch.destroy();
+
+    const preserved = Effects.decrypt({
+      characters: MASK,
+      duration: 900,
+      rollInterval: 0,
+      maskWhitespace: false,
+    });
+    const second = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [preserved],
+    });
+
+    driveUpdate(preserved, second, 0);
+    expect(container.textContent).toBe('### #####');
+    second.destroy();
+  });
+
+  it('should never mask line breaks or tabs, which carry layout', () => {
+    container.innerHTML = 'Neo\n\tTokyo';
+    const fx = Effects.decrypt({
+      characters: MASK,
+      duration: 900,
+      rollInterval: 0,
+      maskWhitespace: true,
+    });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+
+    expect(container.textContent).toBe('###\n\t#####');
+    glitch.destroy();
+  });
+
+  it('should reveal continuously across inline markup', () => {
+    container.innerHTML = 'Neo <span>Tokyo</span>';
+    const fx = Effects.decrypt({
+      characters: MASK,
+      duration: 900,
+      rollInterval: 0,
+      revealOrder: 'forward',
+    });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+    driveUpdate(fx, glitch, 600);
+
+    // Six locked positions run past the element boundary into the span.
+    expect(container.textContent).toBe('Neo To###');
+    expect(container.querySelector('span')?.textContent).toBe('To###');
+
+    glitch.destroy();
+  });
+
+  it('should restore the text and rearm the reveal on reset', () => {
+    container.innerHTML = 'Cyberpunk';
+    const fx = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+    driveUpdate(fx, glitch, 300);
+    expect(container.textContent).toBe('Cyb######');
+
+    if (!fx.reset) throw new Error('decrypt effect must expose a reset hook');
+    fx.reset(glitch);
+    expect(container.textContent).toBe('Cyberpunk');
+
+    // A replay starts from a fully masked string rather than resuming.
+    driveUpdate(fx, glitch, 5000);
+    expect(container.textContent).toBe('#########');
+
+    glitch.destroy();
+  });
+
+  it('should restore the plaintext when the instance stops', () => {
+    container.innerHTML = 'Cyberpunk';
+    const fx = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    glitch.start();
+    driveUpdate(fx, glitch, 0);
+    expect(container.textContent).toBe('#########');
+
+    glitch.stop();
+    expect(container.textContent).toBe('Cyberpunk');
+
+    glitch.destroy();
+  });
+
+  it('should reveal again when the content is replaced after completing', () => {
+    container.innerHTML = 'Cyberpunk';
+    const fx = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+    driveUpdate(fx, glitch, 900);
+    expect(container.textContent).toBe('Cyberpunk');
+
+    container.innerHTML = 'Neo Tokyo';
+    driveUpdate(fx, glitch, 1000);
+
+    expect(container.textContent).toBe('#########');
+
+    glitch.destroy();
+  });
+
+  it('should draw masked characters from the configured pool', () => {
+    container.innerHTML = 'Cyberpunk';
+    const pool = '01';
+    const fx = Effects.decrypt({ characters: pool, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+
+    const rendered = container.textContent || '';
+    expect(rendered.length).toBe('Cyberpunk'.length);
+    expect([...rendered].every((char) => pool.includes(char))).toBe(true);
+
+    glitch.destroy();
   });
 });

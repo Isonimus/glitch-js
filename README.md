@@ -12,7 +12,7 @@ A lightweight, dependency-free TypeScript library for applying stackable digital
 
 ## Features
 
-- **Stackable & Composeable**: Combine RGB split, slice shifting, text scramble, container shaking, opacity flickers, CRT scanlines, and cinematic hologram projection on a single DOM element.
+- **Stackable & Composeable**: Combine RGB split, slice shifting, text scramble, decrypt reveals, container shaking, opacity flickers, CRT scanlines, and cinematic hologram projection on a single DOM element.
 - **Performance First**: Leverages GPU-accelerated SVG color matrix filters and CSS transforms running inside a `requestAnimationFrame` render loop.
 - **Event-Driven Sync**: Uses `MutationObserver` to automatically sync text changes and DOM updates from your main application into the glitch overlays without polling overhead.
 - **Scroll-Visibility Triggers**: Native `IntersectionObserver` support allows triggering glitch effects only when elements scroll into view.
@@ -171,6 +171,29 @@ const hologram = new Glitch(portrait, {
 });
 ```
 
+### 5. Decrypt Reveal on Scroll
+
+Reveal a heading like a decryption in progress: a same-length block of rolling characters that locks into the real text one character at a time.
+
+```typescript
+import { Glitch, Effects } from '@isonimus/glitch-js';
+
+const headline = document.querySelector('.classified-headline') as HTMLElement;
+
+const reveal = new Glitch(headline, {
+  trigger: 'scroll',            // Replays each time the element re-enters the viewport
+  effects: [
+    Effects.decrypt({
+      duration: 1800,           // Time from fully masked to fully readable
+      rollInterval: 40,         // How fast the unlocked characters re-roll
+      revealOrder: 'forward',   // 'random' locks positions in a scattered order
+      maskWhitespace: true,     // Hide word boundaries so it reads as ciphertext
+      onComplete: () => headline.classList.add('is-decrypted')
+    })
+  ]
+});
+```
+
 ---
 
 ## API Reference
@@ -221,6 +244,22 @@ Scrambles the text nodes inside the element using a character pool, while preser
 - `characters` (`string`, default: `'01010101XYZ$#@%&*[]<>?/\\+=-_'`): The pool of glyphs to draw from.
 - `frequency` (`number`, default: `0.2`): Chance of scrambling text on each frame.
 - `scrambleChance` (`number`, default: `0.25`): Chance of any individual character in a text node being scrambled.
+
+### `Effects.decrypt(options?: DecryptOptions)`
+Replaces the text with a same-length string of rolling characters, then locks them into place one position at a time until the real text is revealed — the "hacker movie decryption" reveal.
+
+- `characters` (`string`, default: `'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'`): The pool of glyphs the rolling characters are drawn from.
+- `duration` (`number`, default: `2000`): Milliseconds for the full reveal, from fully masked to fully readable.
+- `rollInterval` (`number`, default: `50`): Milliseconds between re-rolls of the still-masked characters. Rolling on every frame reads as blur rather than as rolling, so this is deliberately slower than the frame rate.
+- `revealOrder` (`'forward' | 'random'`, default: `'forward'`): Whether positions lock left to right, or in a random order.
+- `maskWhitespace` (`boolean`, default: `true`): Whether inline spaces are masked too. `true` hides word boundaries, so the masked text reads as ciphertext; `false` keeps the word shapes visible. Line breaks and tabs are never masked, since they carry layout in pre-formatted text.
+- `onComplete` (`() => void`, optional): Called once each time a reveal finishes.
+
+Unlike the other modules this effect is **finite**: it runs to completion and then stops doing work. Its `reset` hook — which `stop()` calls — rearms it, so `hover` and `click` triggers replay the reveal, and `manual` triggers can replay it with `stop()` followed by `start()`.
+
+> **Note:** because every character is replaced by another of the same count rather than the same width, a proportional font will reflow slightly on each roll. Use a monospace font (or `font-variant-numeric: tabular-nums` for digits) for a reveal that holds its layout still.
+
+> **Stacking with `scramble`:** both modules rewrite the same text nodes, and each one reads the *pristine* text rather than what is currently displayed, so whichever appears later in the `effects` array is the one you see. Listing `decrypt` after `scramble` therefore gives a clean reveal followed by ambient scrambling once the reveal completes, which is usually what you want.
 
 ### `Effects.shake(options?: ShakeOptions)`
 Translates the base container rapidly to simulate vibration.

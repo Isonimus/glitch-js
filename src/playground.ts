@@ -1,7 +1,40 @@
-import { Glitch, Effects } from './glitch.ts';
+import { Glitch, Effects, type DecryptRevealOrder, type GlitchTrigger } from './glitch.ts';
+
+type ShowcaseTab = 'terminal' | 'button' | 'portrait' | 'banner';
+
+const SHOWCASE_TABS: readonly ShowcaseTab[] = ['terminal', 'button', 'portrait', 'banner'];
+const GLITCH_TRIGGERS: readonly GlitchTrigger[] = [
+  'always',
+  'hover',
+  'click',
+  'scroll',
+  'manual',
+];
+const DECRYPT_REVEAL_ORDERS: readonly DecryptRevealOrder[] = ['forward', 'random'];
+
+/**
+ * Narrows a value read out of the markup to the set this module expects. The
+ * playground's own HTML is the source of these values, so anything outside the
+ * set means the markup and this module have drifted apart -- a bug to surface
+ * rather than to absorb with a cast.
+ */
+const parseMarkupValue = <T extends string>(
+  value: string | undefined,
+  allowed: readonly T[],
+  controlName: string
+): T => {
+  const match = allowed.find((candidate) => candidate === value);
+  if (match === undefined) {
+    throw new Error(
+      `Playground: ${controlName} has unexpected value "${value}"; ` +
+        `expected one of ${allowed.join(', ')}.`
+    );
+  }
+  return match;
+};
 
 // State Variables
-let currentTab: 'terminal' | 'button' | 'portrait' | 'banner' = 'terminal';
+let currentTab: ShowcaseTab = 'terminal';
 let currentPreset = 'matrix';
 let glitchController: Glitch | null = null;
 
@@ -38,6 +71,7 @@ interface Elements {
   enableFlicker: HTMLInputElement;
   enableScanlines: HTMLInputElement;
   enableHologram: HTMLInputElement;
+  enableDecrypt: HTMLInputElement;
 
   // Effect Slider Configurations
   rgbOffset: HTMLInputElement;
@@ -73,6 +107,12 @@ interface Elements {
   hologramFlicker: HTMLInputElement;
   hologramFloat: HTMLInputElement;
 
+  decryptDuration: HTMLInputElement;
+  decryptRoll: HTMLInputElement;
+  decryptOrder: HTMLSelectElement;
+  decryptMaskWhitespace: HTMLInputElement;
+  btnDecryptReplay: HTMLButtonElement;
+
   // Control Group Panels
   groups: Record<string, HTMLElement>;
 }
@@ -106,6 +146,7 @@ const elements: Elements = {
   enableFlicker: document.getElementById('toggle-flicker') as HTMLInputElement,
   enableScanlines: document.getElementById('toggle-scanlines') as HTMLInputElement,
   enableHologram: document.getElementById('toggle-hologram') as HTMLInputElement,
+  enableDecrypt: document.getElementById('toggle-decrypt') as HTMLInputElement,
 
   rgbOffset: document.getElementById('rgb-offset') as HTMLInputElement,
   rgbFreq: document.getElementById('rgb-freq') as HTMLInputElement,
@@ -140,6 +181,12 @@ const elements: Elements = {
   hologramFlicker: document.getElementById('hologram-flicker') as HTMLInputElement,
   hologramFloat: document.getElementById('hologram-float') as HTMLInputElement,
 
+  decryptDuration: document.getElementById('decrypt-duration') as HTMLInputElement,
+  decryptRoll: document.getElementById('decrypt-roll') as HTMLInputElement,
+  decryptOrder: document.getElementById('decrypt-order') as HTMLSelectElement,
+  decryptMaskWhitespace: document.getElementById('decrypt-mask-whitespace') as HTMLInputElement,
+  btnDecryptReplay: document.getElementById('btn-decrypt-replay') as HTMLButtonElement,
+
   groups: {
     rgbSplit: document.getElementById('group-rgbSplit') as HTMLElement,
     slice: document.getElementById('group-slice') as HTMLElement,
@@ -148,6 +195,7 @@ const elements: Elements = {
     flicker: document.getElementById('group-flicker') as HTMLElement,
     scanlines: document.getElementById('group-scanlines') as HTMLElement,
     hologram: document.getElementById('group-hologram') as HTMLElement,
+    decrypt: document.getElementById('group-decrypt') as HTMLElement,
   },
 };
 
@@ -160,6 +208,7 @@ interface Preset {
   flicker: { active: boolean; opac: number; freq: number };
   scanlines: { active: boolean; opac: number; pulse: boolean };
   hologram: { active: boolean; color: string; opacity: number; glow: number; scanSpeed: number; flicker: number; float: number };
+  decrypt: { active: boolean; duration: number; rollInterval: number; order: 'forward' | 'random'; maskWhitespace: boolean };
 }
 
 // Preset Data Store
@@ -173,6 +222,7 @@ const presetsData: Record<string, Preset> = {
     flicker: { active: false, opac: 0.2, freq: 0.15 },
     scanlines: { active: true, opac: 0.2, pulse: true },
     hologram: { active: false, color: '#00d9ff', opacity: 0.85, glow: 0.5, scanSpeed: 1, flicker: 0.08, float: 3 },
+    decrypt: { active: true, duration: 1500, rollInterval: 40, order: 'forward', maskWhitespace: true },
   },
   holo: {
     trigger: 'always',
@@ -183,6 +233,7 @@ const presetsData: Record<string, Preset> = {
     flicker: { active: false, opac: 0.4, freq: 0.25 },
     scanlines: { active: true, opac: 0.12, pulse: true },
     hologram: { active: true, color: '#00d9ff', opacity: 0.82, glow: 0.6, scanSpeed: 1.2, flicker: 0.1, float: 4 },
+    decrypt: { active: false, duration: 2000, rollInterval: 50, order: 'random', maskWhitespace: true },
   },
   failure: {
     trigger: 'always',
@@ -193,6 +244,7 @@ const presetsData: Record<string, Preset> = {
     flicker: { active: true, opac: 0.05, freq: 0.45 },
     scanlines: { active: true, opac: 0.15, pulse: true },
     hologram: { active: false, color: '#00d9ff', opacity: 0.85, glow: 0.5, scanSpeed: 1, flicker: 0.08, float: 3 },
+    decrypt: { active: false, duration: 3000, rollInterval: 80, order: 'random', maskWhitespace: true },
   },
   subtle: {
     trigger: 'hover',
@@ -203,6 +255,7 @@ const presetsData: Record<string, Preset> = {
     flicker: { active: false, opac: 0.2, freq: 0.15 },
     scanlines: { active: false, opac: 0.12, pulse: true },
     hologram: { active: false, color: '#00d9ff', opacity: 0.85, glow: 0.5, scanSpeed: 1, flicker: 0.08, float: 3 },
+    decrypt: { active: false, duration: 1200, rollInterval: 60, order: 'forward', maskWhitespace: true },
   },
 };
 
@@ -259,6 +312,13 @@ const applyPresetToUI = (presetKey: string): void => {
   elements.hologramScanSpeed.value = p.hologram.scanSpeed.toString();
   elements.hologramFlicker.value = p.hologram.flicker.toString();
   elements.hologramFloat.value = p.hologram.float.toString();
+
+  // Decrypt Reveal
+  elements.enableDecrypt.checked = p.decrypt.active;
+  elements.decryptDuration.value = p.decrypt.duration.toString();
+  elements.decryptRoll.value = p.decrypt.rollInterval.toString();
+  elements.decryptOrder.value = p.decrypt.order;
+  elements.decryptMaskWhitespace.checked = p.decrypt.maskWhitespace;
 
   // Show/hide sensitivity sliders
   const rgbSensCont = document.getElementById('rgb-mouseSens-container');
@@ -345,6 +405,12 @@ const updateUIValues = (): void => {
 
   const valHoloFloat = document.getElementById('val-hologram-float');
   if (valHoloFloat) valHoloFloat.textContent = `${elements.hologramFloat.value}px`;
+
+  const valDecryptDuration = document.getElementById('val-decrypt-duration');
+  if (valDecryptDuration) valDecryptDuration.textContent = `${elements.decryptDuration.value}ms`;
+
+  const valDecryptRoll = document.getElementById('val-decrypt-roll');
+  if (valDecryptRoll) valDecryptRoll.textContent = `${elements.decryptRoll.value}ms`;
 };
 
 // Helper: Get active targets string for UI labels
@@ -406,6 +472,12 @@ const getGlitchOptionsFromUI = () => {
   if (elements.enableHologram.checked) {
     activeEffects.push(
       `    Effects.hologram({\n      color: '${elements.hologramColor.value}',\n      opacity: ${elements.hologramOpacity.value},\n      glowIntensity: ${elements.hologramGlow.value},\n      scanSpeed: ${elements.hologramScanSpeed.value},\n      flickerFrequency: ${elements.hologramFlicker.value},\n      floatAmplitude: ${elements.hologramFloat.value}\n    })`
+    );
+  }
+
+  if (elements.enableDecrypt.checked) {
+    activeEffects.push(
+      `    Effects.decrypt({\n      duration: ${elements.decryptDuration.value},\n      rollInterval: ${elements.decryptRoll.value},\n      revealOrder: '${elements.decryptOrder.value}',\n      maskWhitespace: ${elements.decryptMaskWhitespace.checked}\n    })`
     );
   }
 
@@ -544,10 +616,24 @@ const updateGlitchInstance = (): void => {
       })
     );
   }
+  if (elements.enableDecrypt.checked) {
+    realEffects.push(
+      Effects.decrypt({
+        duration: parseInt(elements.decryptDuration.value),
+        rollInterval: parseInt(elements.decryptRoll.value),
+        revealOrder: parseMarkupValue(
+          elements.decryptOrder.value,
+          DECRYPT_REVEAL_ORDERS,
+          'decrypt reveal order'
+        ),
+        maskWhitespace: elements.decryptMaskWhitespace.checked,
+      })
+    );
+  }
 
   if (elements.engineActive.checked) {
     glitchController = new Glitch(activeTarget, {
-      trigger: opts.trigger as any,
+      trigger: parseMarkupValue(opts.trigger, GLITCH_TRIGGERS, 'trigger mode'),
       active: true,
       effects: realEffects,
     });
@@ -642,6 +728,11 @@ elements.btnManualTrigger.addEventListener('mouseup', () => {
   }
 });
 
+// Replay Decrypt Reveal (the effect is finite, so replaying it means rebuilding the instance)
+elements.btnDecryptReplay.addEventListener('click', () => {
+  updateGlitchInstance();
+});
+
 // Tab Switching
 elements.tabs.forEach((tab) => {
   tab.addEventListener('click', () => {
@@ -654,7 +745,7 @@ elements.tabs.forEach((tab) => {
       tab.classList.add('cyan-active');
     }
 
-    currentTab = tab.dataset.tab as any;
+    currentTab = parseMarkupValue(tab.dataset.tab, SHOWCASE_TABS, 'showcase tab');
 
     // Toggle visibility inside viewport
     document.querySelectorAll('.showcase-content').forEach((c) => {

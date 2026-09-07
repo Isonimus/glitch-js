@@ -69,6 +69,17 @@ export interface HologramOptions {
   floatAmplitude?: number;
 }
 
+export type DecryptRevealOrder = 'forward' | 'random';
+
+export interface DecryptOptions {
+  characters?: string;
+  duration?: number;
+  rollInterval?: number;
+  revealOrder?: DecryptRevealOrder;
+  maskWhitespace?: boolean;
+  onComplete?: () => void;
+}
+
 // Helper to ensure the custom SVG filters for RGB Split are injected into the document body
 const ensureSvgFilters = (): void => {
   if (document.getElementById('glitch-svg-filters')) return;
@@ -103,52 +114,179 @@ const ensureSvgFilters = (): void => {
   document.body.appendChild(svg);
 };
 
-// Helper to recursively scramble text nodes
-const scrambleTextNodes = (node: Node, chars: string, chance: number): void => {
+/**
+ * A view over the text nodes an effect is allowed to rewrite, treated as one
+ * logical string so that reveals and scrambles read continuously across inline
+ * markup (e.g. a heading containing a <span>).
+ */
+export interface ManagedText {
+  nodes: Text[];
+  /** Original length of each node, used to split a transformed string back. */
+  lengths: number[];
+  /** Concatenation of every node's original text. */
+  original: string;
+}
+
+/**
+ * Original text keyed by node. A WeakMap keeps the DOM free of stashed custom
+ * properties (which could only be read back through an `any` cast) and lets the
+ * entries die with the nodes.
+ */
+const originalTextByNode = new WeakMap<Text, string>();
+
+// Elements whose text is structural rather than rendered copy, or which belong
+// to the effect machinery itself. Rewriting a <style> or <script> body would
+// break the page, so text effects never descend into them.
+const isTextEffectBoundary = (element: HTMLElement): boolean =>
+  element.tagName === 'SCRIPT' ||
+  element.tagName === 'STYLE' ||
+  element.classList.contains('glitch-clone') ||
+  element.classList.contains('glitch-overlay');
+
+// Depth-first collection of rewritable text nodes. Document order matters: the
+// same traversal over an element and over its clones yields aligned lists.
+const collectTextNodes = (node: Node, collected: Text[] = []): Text[] => {
   if (node.nodeType === Node.TEXT_NODE) {
-    const textNode = node as Text;
-    if ((textNode as any).originalContent === undefined) {
-      (textNode as any).originalContent = textNode.nodeValue || '';
-    }
-    const text = (textNode as any).originalContent as string;
-    let scrambled = '';
-    for (let i = 0; i < text.length; i++) {
-      if (/\s/.test(text[i])) {
-        scrambled += text[i];
-      } else if (Math.random() < chance) {
-        scrambled += chars[Math.floor(Math.random() * chars.length)];
-      } else {
-        scrambled += text[i];
+    collected.push(node as Text);
+    return collected;
+  }
+
+  for (const child of Array.from(node.childNodes)) {
+    if (child instanceof HTMLElement && isTextEffectBoundary(child)) continue;
+    collectTextNodes(child, collected);
+  }
+
+  return collected;
+};
+
+// True for nodes whose text a running effect owns, so that the element's own
+// MutationObserver can tell our writes apart from an external content change.
+const isManagedTextNode = (node: Node): boolean =>
+  node.nodeType === Node.TEXT_NODE && originalTextByNode.has(node as Text);
+
+// True for the clones and overlays the library injects. characterData mutations
+// report the Text node itself, so the nearest element is the one to inspect.
+const isGlitchOwnedNode = (node: Node): boolean => {
+  let current: Node | null = node.nodeType === Node.TEXT_NODE ? node.parentNode : node;
+
+  while (current) {
+    if (current instanceof HTMLElement) {
+      if (
+        current.classList.contains('glitch-clone') ||
+        current.classList.contains('glitch-overlay')
+      ) {
+        return true;
       }
     }
-    textNode.nodeValue = scrambled;
-  } else {
-    for (const child of Array.from(node.childNodes)) {
-      if (child instanceof HTMLElement) {
-        if (child.classList.contains('glitch-clone')) continue;
-        if (child.classList.contains('glitch-overlay')) continue;
-      }
-      scrambleTextNodes(child, chars, chance);
+    current = current.parentNode;
+  }
+
+  return false;
+};
+
+// True when a mutation was caused by the library itself rather than by external
+// code changing the element's content. Without this, our own bookkeeping --
+// injecting clones, and rewriting the text nodes a running text effect owns --
+// would rebuild every clone's markup, once per animation frame in the text case.
+const isOwnMutation = (mutation: MutationRecord): boolean => {
+  if (isGlitchOwnedNode(mutation.target)) return true;
+
+  if (mutation.type === 'characterData') {
+    return isManagedTextNode(mutation.target);
+  }
+
+  const changedNodes = [
+    ...Array.from(mutation.addedNodes),
+    ...Array.from(mutation.removedNodes),
+  ];
+  return changedNodes.length > 0 && changedNodes.every(isGlitchOwnedNode);
+};
+
+const randomChar = (characters: string): string =>
+  characters[Math.floor(Math.random() * characters.length)];
+
+// Mixed-case alphanumerics read as encrypted payload; the symbol-heavy pool used
+// by `scramble` reads as corruption, which is a different effect.
+const DECRYPT_CHARACTERS =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+interface DecryptState {
+  original: string;
+  /** Positions eligible for masking, parallel to `original`. */
+  isMaskable: boolean[];
+  /** Positions already locked to their real character. */
+  isLocked: boolean[];
+  /** Maskable positions in the order they lock. */
+  revealOrder: number[];
+  /** Current rolling character per position; only read where unlocked. */
+  rolledCharacters: string[];
+  lockedCount: number;
+  /** Timestamp of the first update after a reset, or -1 before it. */
+  startTime: number;
+  lastRollTime: number;
+  isComplete: boolean;
+}
+
+/**
+ * Whether a character may be replaced by a rolling one. Line breaks and tabs
+ * carry layout in pre-formatted text, so they are never masked; inline spaces
+ * are, optionally, since hiding word boundaries is what makes the masked text
+ * read as ciphertext rather than as a redacted sentence.
+ */
+const isMaskableCharacter = (char: string, maskWhitespace: boolean): boolean => {
+  if (!/\s/.test(char)) return true;
+  return maskWhitespace && (char === ' ' || char === '\u00a0');
+};
+
+const createDecryptState = (
+  original: string,
+  maskWhitespace: boolean,
+  revealOrder: DecryptRevealOrder
+): DecryptState => {
+  const isMaskable: boolean[] = [];
+  const order: number[] = [];
+
+  for (let index = 0; index < original.length; index++) {
+    const maskable = isMaskableCharacter(original[index], maskWhitespace);
+    isMaskable.push(maskable);
+    if (maskable) order.push(index);
+  }
+
+  if (revealOrder === 'random') {
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+  }
+
+  return {
+    original,
+    isMaskable,
+    isLocked: new Array<boolean>(original.length).fill(false),
+    revealOrder: order,
+    rolledCharacters: new Array<string>(original.length).fill(''),
+    lockedCount: 0,
+    startTime: -1,
+    lastRollTime: -1,
+    isComplete: false,
+  };
+};
+
+const rollUnlockedCharacters = (state: DecryptState, characters: string): void => {
+  for (let index = 0; index < state.original.length; index++) {
+    if (state.isMaskable[index] && !state.isLocked[index]) {
+      state.rolledCharacters[index] = randomChar(characters);
     }
   }
 };
 
-// Helper to restore original text nodes
-const restoreTextNodes = (node: Node): void => {
-  if (node.nodeType === Node.TEXT_NODE) {
-    const textNode = node as Text;
-    if ((textNode as any).originalContent !== undefined) {
-      textNode.nodeValue = (textNode as any).originalContent;
-    }
-  } else {
-    for (const child of Array.from(node.childNodes)) {
-      if (child instanceof HTMLElement) {
-        if (child.classList.contains('glitch-clone')) continue;
-        if (child.classList.contains('glitch-overlay')) continue;
-      }
-      restoreTextNodes(child);
-    }
+const renderDecryptState = (state: DecryptState): string => {
+  let rendered = '';
+  for (let index = 0; index < state.original.length; index++) {
+    const showsPlaintext = state.isLocked[index] || !state.isMaskable[index];
+    rendered += showsPlaintext ? state.original[index] : state.rolledCharacters[index];
   }
+  return rendered;
 };
 
 export class Glitch {
@@ -228,15 +366,9 @@ export class Glitch {
 
     // Set up MutationObserver to sync content dynamically
     this.observer = new MutationObserver((mutations) => {
-      // Avoid reacting to mutations on our own clones/overlays
-      const hasExternalMutation = mutations.some((m) => {
-        const target = m.target;
-        return !(
-          target instanceof HTMLElement &&
-          (target.classList.contains('glitch-clone') ||
-            target.classList.contains('glitch-overlay'))
-        );
-      });
+      // Our own writes are mirrored into clones at write time, so only an
+      // external content change needs a clone rebuild.
+      const hasExternalMutation = mutations.some((m) => !isOwnMutation(m));
       if (hasExternalMutation) {
         this.syncClones();
       }
@@ -372,6 +504,77 @@ export class Glitch {
     }
   }
 
+  /**
+   * Snapshots the text nodes a text effect may rewrite. The original text of
+   * each node is captured the first time it is seen, so repeated reads always
+   * describe the pristine content rather than whatever is currently displayed.
+   */
+  readManagedText(): ManagedText {
+    const nodes = collectTextNodes(this.element);
+    const lengths: number[] = [];
+    let original = '';
+
+    for (const node of nodes) {
+      let nodeOriginal = originalTextByNode.get(node);
+      if (nodeOriginal === undefined) {
+        nodeOriginal = node.nodeValue || '';
+        originalTextByNode.set(node, nodeOriginal);
+      }
+      lengths.push(nodeOriginal.length);
+      original += nodeOriginal;
+    }
+
+    return { nodes, lengths, original };
+  }
+
+  /**
+   * Writes a transformed version of the managed text back to the element and
+   * mirrors it into the clones, so overlay ghosts never display plaintext that
+   * the element itself is still hiding.
+   *
+   * `text` must match the managed original character for character in length --
+   * the split back into nodes depends on it, and an effect producing a different
+   * length is a bug rather than something to paper over.
+   */
+  writeManagedText(managed: ManagedText, text: string): void {
+    if (text.length !== managed.original.length) {
+      throw new Error(
+        `Glitch: managed text write of ${text.length} characters does not match ` +
+          `the original length of ${managed.original.length}.`
+      );
+    }
+
+    const slices: string[] = [];
+    let offset = 0;
+    for (const length of managed.lengths) {
+      slices.push(text.slice(offset, offset + length));
+      offset += length;
+    }
+
+    managed.nodes.forEach((node, index) => {
+      node.nodeValue = slices[index];
+    });
+
+    for (const clone of this.clones) {
+      const cloneNodes = collectTextNodes(clone);
+      if (cloneNodes.length !== managed.nodes.length) {
+        // Structural drift means the index mapping is no longer trustworthy;
+        // rebuild from the element instead of writing text to the wrong nodes.
+        this.syncClones();
+        continue;
+      }
+      cloneNodes.forEach((node, index) => {
+        node.nodeValue = slices[index];
+      });
+    }
+  }
+
+  /** Restores the pristine text of every managed node, clones included. */
+  restoreManagedText(): void {
+    const managed = this.readManagedText();
+    this.writeManagedText(managed, managed.original);
+  }
+
   setupTriggers(): void {
     this.boundStart = () => this.start();
     this.boundStop = () => this.stop();
@@ -461,7 +664,7 @@ export class Glitch {
     this.element.style.opacity = '';
     this.element.style.filter = '';
 
-    restoreTextNodes(this.element);
+    this.restoreManagedText();
 
     // Hide and reset all clones
     this.clones.forEach((c) => {
@@ -691,14 +894,96 @@ export const Effects = {
     return {
       name: 'scramble',
       update(instance) {
-        if (Math.random() < opts.frequency) {
-          scrambleTextNodes(instance.element, opts.characters, opts.scrambleChance);
-        } else {
-          restoreTextNodes(instance.element);
+        const managed = instance.readManagedText();
+
+        if (Math.random() >= opts.frequency) {
+          instance.writeManagedText(managed, managed.original);
+          return;
+        }
+
+        let scrambled = '';
+        for (const char of managed.original) {
+          const shouldScramble = !/\s/.test(char) && Math.random() < opts.scrambleChance;
+          scrambled += shouldScramble ? randomChar(opts.characters) : char;
+        }
+        instance.writeManagedText(managed, scrambled);
+      },
+      reset(instance) {
+        instance.restoreManagedText();
+      },
+    };
+  },
+
+  /**
+   * Decrypt Reveal Effect
+   * Replaces the text with a same-length string of rolling characters, then
+   * locks them into place one position at a time until the real text is fully
+   * revealed. Unlike the ambient effects, this one is a finite timeline: once
+   * every position has locked it stops doing work, and `reset` (which `stop`
+   * runs) rearms it so hover and click triggers replay the reveal.
+   */
+  decrypt(options: DecryptOptions = {}): GlitchEffect {
+    const opts = {
+      characters: DECRYPT_CHARACTERS,
+      duration: 2000,
+      rollInterval: 50,
+      revealOrder: 'forward' as DecryptRevealOrder,
+      maskWhitespace: true,
+      ...options,
+    };
+
+    // Keyed by instance rather than held in the closure so that one effect
+    // object can be shared across several Glitch instances without their
+    // reveals interfering.
+    const stateByInstance = new WeakMap<Glitch, DecryptState>();
+
+    return {
+      name: 'decrypt',
+      update(instance, time) {
+        // Read before the completion check: comparing against the managed text
+        // is how a finished reveal notices that the content was replaced, so
+        // dynamic text gets revealed again rather than staying plaintext.
+        const managed = instance.readManagedText();
+
+        let state = stateByInstance.get(instance);
+        if (!state || state.original !== managed.original) {
+          state = createDecryptState(managed.original, opts.maskWhitespace, opts.revealOrder);
+          stateByInstance.set(instance, state);
+        }
+
+        // The reveal is complete: leave the plaintext alone instead of
+        // rewriting an identical string on every remaining frame.
+        if (state.isComplete) return;
+
+        if (state.startTime < 0) {
+          state.startTime = time;
+          state.lastRollTime = time;
+          rollUnlockedCharacters(state, opts.characters);
+        }
+
+        const progress =
+          opts.duration <= 0 ? 1 : Math.min(1, (time - state.startTime) / opts.duration);
+        const targetLockedCount = Math.round(progress * state.revealOrder.length);
+        while (state.lockedCount < targetLockedCount) {
+          state.isLocked[state.revealOrder[state.lockedCount]] = true;
+          state.lockedCount++;
+        }
+
+        if (time - state.lastRollTime >= opts.rollInterval) {
+          state.lastRollTime = time;
+          rollUnlockedCharacters(state, opts.characters);
+        }
+
+        instance.writeManagedText(managed, renderDecryptState(state));
+
+        if (state.lockedCount >= state.revealOrder.length) {
+          state.isComplete = true;
+          opts.onComplete?.();
         }
       },
       reset(instance) {
-        restoreTextNodes(instance.element);
+        stateByInstance.delete(instance);
+        instance.restoreManagedText();
       },
     };
   },
