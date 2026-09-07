@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-07
+
+### Added
+- **Decrypt Reveal Effect**: New `Effects.decrypt()` module masks the text with a same-length string of rolling characters and locks them into place one position at a time until the real text is revealed. Configurable via `characters`, `duration`, `rollInterval`, `revealOrder`, `maskWhitespace`, and an `onComplete` callback (`DecryptOptions`). Unlike the ambient effects it is a finite timeline: it stops working once the reveal lands, and its `reset` hook rearms it so `hover`, `click`, and `scroll` triggers replay it.
+- **Playground Decrypt Controls**: Added a Decrypt Reveal control group to the interactive playground, including an explicit replay button, since a finished one-shot effect is otherwise indistinguishable from a broken one.
+- **Documentation**: Added the `Effects.decrypt()` API reference and a decrypt-on-scroll usage example to the README.
+
+### Changed
+- **Shared Managed-Text Primitives**: Text effects now operate through `readManagedText()` / `writeManagedText()` / `restoreManagedText()` on the `Glitch` instance, which treat the element's text nodes as one logical string. This makes reveals read continuously across inline markup, mirrors text writes directly into the overlay clones (so ghost layers can no longer display plaintext the element is still hiding), and stops text effects from descending into `<script>` and `<style>` bodies.
+
+### Fixed
+- **Per-Frame Clone Rebuilds**: The `MutationObserver` classified the library's own DOM writes as external content changes, because a `characterData` record reports the `Text` node rather than an element. An active text effect therefore triggered a full clone markup rebuild on every animation frame. Mutations caused by the library — clone injection, and writes to the text nodes a running effect owns — are now recognised as its own.
+- **Original Text Storage**: The pristine text of each node is held in a `WeakMap` instead of a custom property stashed on the DOM node behind an `any` cast.
+
 ## [1.1.0] - 2026-07-01
 
 ### Added
