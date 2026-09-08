@@ -407,7 +407,6 @@ export class Glitch {
   clones: HTMLElement[] = [];
   overlays: Record<string, HTMLElement> = {};
   originalStyles: { position?: string; overflow?: string } = {};
-  state: Record<string, any> = {};
 
   observer: MutationObserver | null = null;
   intersectionObserver: IntersectionObserver | null = null;
