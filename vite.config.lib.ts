@@ -21,6 +21,10 @@ export default defineConfig({
   },
   plugins: [
     dts({
+      // The declaration build follows the published entry point only. The
+      // tsconfig program spans all of `src`, so without this the test suite
+      // and the playground emit declarations of their own into the package.
+      include: ['src/glitch.ts'],
       insertTypesEntry: true,
       rollupTypes: true
     })
