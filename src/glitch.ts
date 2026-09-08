@@ -77,6 +77,16 @@ export interface DecryptOptions {
   rollInterval?: number;
   revealOrder?: DecryptRevealOrder;
   maskWhitespace?: boolean;
+  /**
+   * Declares that the target renders whitespace verbatim (`white-space: pre`,
+   * `pre-wrap`, `break-spaces`, or a `<pre>` element), so `maskWhitespace` may
+   * mask whitespace runs and indentation as well as single spaces. It is an
+   * explicit option because the alternative is unverifiable: `getComputedStyle`
+   * reports nothing usable under jsdom, so an inferred version of this could
+   * not be tested. Leave it `false` for ordinary HTML, where layout collapses
+   * that whitespace and masking it would change the rendered length.
+   */
+  preformatted?: boolean;
   onComplete?: () => void;
 }
 
@@ -228,28 +238,128 @@ interface DecryptState {
 }
 
 /**
- * Whether a character may be replaced by a rolling one. Line breaks and tabs
- * carry layout in pre-formatted text, so they are never masked; inline spaces
- * are, optionally, since hiding word boundaries is what makes the masked text
- * read as ciphertext rather than as a redacted sentence.
+ * The characters HTML treats as document white space. A text node made only of
+ * these is dropped entirely by flex and grid containers, and collapses to at
+ * most a single space everywhere else. A non-breaking space is deliberately not
+ * in the set: layout always paints it.
  */
-const isMaskableCharacter = (char: string, maskWhitespace: boolean): boolean => {
-  if (!/\s/.test(char)) return true;
-  return maskWhitespace && (char === ' ' || char === '\u00a0');
+const DOCUMENT_WHITESPACE_ONLY = /^[ \t\n\r\f]+$/;
+
+const NON_BREAKING_SPACE = '\u00a0';
+
+const isWhitespace = (char: string): boolean => /\s/.test(char);
+
+/**
+ * Whether a character may be replaced by a rolling one.
+ *
+ * Masking must not change what the browser paints: swapping a character layout
+ * discards for one it renders makes the text longer on screen, which reflows
+ * the element for the length of the reveal. Source indentation is the common
+ * case -- 60% of the characters in a hand-indented terminal markup block are
+ * collapsed whitespace, and in a flex row they are dropped outright, so masking
+ * them turns a 32-character line into a 125-character one.
+ *
+ * A plain space is therefore masked only where layout is guaranteed to paint
+ * it: as a single space between two non-whitespace characters, in a text node
+ * that carries real copy. Whitespace runs, leading and trailing whitespace,
+ * tabs and newlines are exactly the ones layout collapses, so they are left
+ * alone. This costs the mask nothing on ordinary copy, where the spaces that
+ * hide word boundaries are precisely the interior ones.
+ */
+/**
+ * What the caller has told us about whitespace: whether to mask it at all, and
+ * whether the target renders it verbatim (`white-space: pre` and friends).
+ * The second one has to be declared rather than inferred -- see the note on
+ * `preformatted` in `DecryptOptions`.
+ */
+interface WhitespaceMaskPolicy {
+  maskWhitespace: boolean;
+  preformatted: boolean;
+}
+
+const isMaskableCharacter = (
+  original: string,
+  index: number,
+  nodeIsWhitespaceOnly: boolean,
+  policy: WhitespaceMaskPolicy
+): boolean => {
+  const char = original[index];
+  if (!isWhitespace(char)) return true;
+  if (!policy.maskWhitespace) return false;
+
+  // Always painted, never collapsed, and it keeps a flex or grid item alive.
+  if (char === NON_BREAKING_SPACE) return true;
+
+  // A tab advances to the next tab stop and a line break ends the line, so
+  // neither is one character wide even where whitespace is preserved.
+  if (char !== ' ') return false;
+
+  // Dropped outright by a flex or grid container. Whether a preserved
+  // `white-space` rescues such a node is not something the library can check,
+  // so it stays out of the mask either way.
+  if (nodeIsWhitespaceOnly) return false;
+
+  // The author has declared that the target paints whitespace verbatim, which
+  // is the one thing this rule cannot detect for itself.
+  if (policy.preformatted) return true;
+
+  const previous = original[index - 1];
+  const next = original[index + 1];
+  return (
+    previous !== undefined &&
+    next !== undefined &&
+    !isWhitespace(previous) &&
+    !isWhitespace(next)
+  );
+};
+
+/**
+ * Maskability per position. Built per text node, because whether a space is
+ * rendered depends on whether its own node carries copy, while the neighbour
+ * test spans the whole managed string so that a space at a node boundary
+ * (`Hello <span>World</span>`) is judged by what it actually sits between.
+ */
+const buildMaskableFlags = (
+  managed: ManagedText,
+  policy: WhitespaceMaskPolicy
+): boolean[] => {
+  const { original, lengths } = managed;
+  const flags = new Array<boolean>(original.length);
+  let offset = 0;
+
+  for (const length of lengths) {
+    const nodeText = original.slice(offset, offset + length);
+    const nodeIsWhitespaceOnly = DOCUMENT_WHITESPACE_ONLY.test(nodeText);
+
+    for (let position = 0; position < length; position++) {
+      const index = offset + position;
+      flags[index] = isMaskableCharacter(original, index, nodeIsWhitespaceOnly, policy);
+    }
+
+    offset += length;
+  }
+
+  if (offset !== original.length) {
+    throw new Error(
+      `Glitch: managed text node lengths total ${offset} characters but the ` +
+        `concatenated text is ${original.length} characters long.`
+    );
+  }
+
+  return flags;
 };
 
 const createDecryptState = (
-  original: string,
-  maskWhitespace: boolean,
+  managed: ManagedText,
+  policy: WhitespaceMaskPolicy,
   revealOrder: DecryptRevealOrder
 ): DecryptState => {
-  const isMaskable: boolean[] = [];
+  const { original } = managed;
+  const isMaskable = buildMaskableFlags(managed, policy);
   const order: number[] = [];
 
   for (let index = 0; index < original.length; index++) {
-    const maskable = isMaskableCharacter(original[index], maskWhitespace);
-    isMaskable.push(maskable);
-    if (maskable) order.push(index);
+    if (isMaskable[index]) order.push(index);
   }
 
   if (revealOrder === 'random') {
@@ -297,7 +407,6 @@ export class Glitch {
   clones: HTMLElement[] = [];
   overlays: Record<string, HTMLElement> = {};
   originalStyles: { position?: string; overflow?: string } = {};
-  state: Record<string, any> = {};
 
   observer: MutationObserver | null = null;
   intersectionObserver: IntersectionObserver | null = null;
@@ -369,7 +478,18 @@ export class Glitch {
       // Our own writes are mirrored into clones at write time, so only an
       // external content change needs a clone rebuild.
       const hasExternalMutation = mutations.some((m) => !isOwnMutation(m));
-      if (hasExternalMutation) {
+      if (!hasExternalMutation) return;
+
+      // A wholesale content replacement (`element.innerHTML = ...`) takes the
+      // injected clones and overlays with it. Syncing into nodes that are no
+      // longer in the document would leave every clone- and overlay-based
+      // effect rendering nothing, with no error to show for it.
+      const isDetached = this.injectedNodes().some(
+        (node) => node.parentNode !== this.element
+      );
+      if (isDetached) {
+        this.reinjectEffectNodes();
+      } else {
         this.syncClones();
       }
     });
@@ -395,6 +515,46 @@ export class Glitch {
 
     if (this.options.active && this.options.trigger === 'always') {
       this.start();
+    }
+  }
+
+  /** The clones and effect overlays this instance injected into the element. */
+  injectedNodes(): HTMLElement[] {
+    return [...this.clones, ...Object.values(this.overlays)];
+  }
+
+  /**
+   * Rebuilds the injected DOM after an external content replacement detached
+   * it. The old nodes are removed and both records cleared first, which keeps
+   * every effect's `setup` a create-only path: it can re-inject without
+   * duplicating an overlay or leaking the node it replaces.
+   */
+  reinjectEffectNodes(): void {
+    const previousCloneCount = this.clones.length;
+
+    this.clones.forEach((clone) => clone.remove());
+    this.clones = [];
+    Object.values(this.overlays).forEach((overlay) => overlay.remove());
+    this.overlays = {};
+
+    for (const effect of this.options.effects) {
+      if (effect.setup) {
+        effect.setup(this);
+      }
+    }
+
+    // Clones can also be created directly, without an effect owning them, in
+    // which case no `setup` call brings them back.
+    if (this.clones.length === 0 && previousCloneCount > 0) {
+      this.createClones(previousCloneCount);
+    }
+
+    // `start()` is what normally reveals the clones, so a rebuild mid-run has
+    // to do it here or the effect stays invisible until the next start.
+    if (this.isRunning) {
+      this.clones.forEach((clone) => {
+        clone.style.display = 'block';
+      });
     }
   }
 
@@ -929,6 +1089,7 @@ export const Effects = {
       rollInterval: 50,
       revealOrder: 'forward' as DecryptRevealOrder,
       maskWhitespace: true,
+      preformatted: false,
       ...options,
     };
 
@@ -947,7 +1108,11 @@ export const Effects = {
 
         let state = stateByInstance.get(instance);
         if (!state || state.original !== managed.original) {
-          state = createDecryptState(managed.original, opts.maskWhitespace, opts.revealOrder);
+          state = createDecryptState(
+            managed,
+            { maskWhitespace: opts.maskWhitespace, preformatted: opts.preformatted },
+            opts.revealOrder
+          );
           stateByInstance.set(instance, state);
         }
 

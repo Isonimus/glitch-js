@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-08
+
+### Added
+- **`DecryptOptions.preformatted`**: Declares that the target renders whitespace verbatim (`white-space: pre`, `pre-wrap`, `break-spaces`, or a `<pre>` element), so `maskWhitespace` masks whitespace runs and indentation as well as single spaces. Explicit rather than detected, because a detected version could not be tested: `getComputedStyle` reports no usable `white-space` under jsdom. Tabs, line breaks, and whitespace-only text nodes stay out of the mask either way.
+
+### Changed
+- **Declaration Build Scope**: The library's declaration build now follows the published entry point only. The tsconfig program spans all of `src`, so `glitch.test.d.ts` and `playground.d.ts` were emitted into `dist/lib` and shipped to consumers — the latter implying a public surface that is not one. The published tarball is now `LICENSE`, `README.md`, `package.json`, and the three `dist/lib` artifacts.
+
+### Removed
+- **`Glitch.state`** (breaking): The untyped `Record<string, any>` scratch space on the instance is gone. No built-in effect ever used it and it was never documented, while its `any` value type defeated checking at every use. Custom effects should keep per-instance state in a `WeakMap<Glitch, T>` scoped to the effect factory, as `Effects.decrypt()` does: it stays fully typed, it dies with the instance, and one effect object can then be shared across several instances without their state interfering.
+
+### Fixed
+- **Decrypt Masked Collapsible Whitespace**: `maskWhitespace` replaced every inline space, including the source indentation of hand-formatted markup, which the browser collapses or drops entirely. A character painted where the browser paints none lengthened the line and added line boxes of its own for the duration of the reveal — in the playground's terminal demo, a 32-character header line masked to 125 characters, and four indentation nodes became four extra lines of ciphertext between the real ones. Only whitespace layout is guaranteed to paint is masked now: a single space between two non-whitespace characters, plus non-breaking spaces. Whitespace runs, leading and trailing whitespace, tabs, line breaks, and whitespace-only text nodes (which flex and grid containers drop) are left intact.
+- **Clones and Overlays Orphaned by an External Content Replacement**: Assigning to the target element's `innerHTML` removed the injected `.glitch-clone` and `.glitch-overlay` nodes along with the content, while the instance kept referencing the detached nodes and syncing into them. Every clone- and overlay-based effect (`rgbSplit`, `slice`, `scanlines`, `hologram`) silently stopped rendering. The `MutationObserver` now detects that its injected DOM was detached and rebuilds it through the effects' `setup` hooks, which also restores the per-clone channel filters and re-reveals the clones if the instance is running.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added
