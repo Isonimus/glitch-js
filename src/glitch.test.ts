@@ -360,20 +360,66 @@ describe('Glitch.js managed text', () => {
     glitch.destroy();
   });
 
-  it('should still rebuild clones when the content changes externally', async () => {
+  it('should update the clones when the content changes externally', async () => {
+    container.innerHTML = 'Cyberpunk';
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+    glitch.createClones(1);
+    const clone = glitch.clones[0];
+
+    // A change that leaves the injected clone in place: the paragraph is added
+    // next to it rather than replacing the element's contents.
+    container.appendChild(document.createElement('p')).textContent = 'Neo Tokyo';
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(glitch.clones[0]).toBe(clone);
+    expect(clone.textContent).toContain('Neo Tokyo');
+
+    glitch.destroy();
+  });
+
+  it('should rebuild the clones an external content replacement detached', async () => {
     container.innerHTML = 'Cyberpunk';
     const glitch = new Glitch(container, { active: false, trigger: 'manual' });
     glitch.createClones(1);
 
-    const syncSpy = vi.spyOn(glitch, 'syncClones');
+    // Assigning innerHTML removes the injected clone along with the content.
     container.innerHTML = 'Neo Tokyo';
-
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(syncSpy).toHaveBeenCalled();
+    // Re-syncing the detached node instead would leave the instance tracking a
+    // clone that is no longer in the document, so the effect renders nothing.
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(1);
+    expect(glitch.clones.length).toBe(1);
+    expect(glitch.clones[0].parentNode).toBe(container);
     expect(glitch.clones[0].textContent).toBe('Neo Tokyo');
 
-    syncSpy.mockRestore();
+    glitch.destroy();
+  });
+
+  it('should restore effect styling and overlays after a content replacement', async () => {
+    container.innerHTML = 'Cyberpunk';
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [Effects.rgbSplit(), Effects.scanlines()],
+    });
+    glitch.start();
+    expect(container.querySelectorAll('.glitch-overlay').length).toBe(1);
+
+    container.innerHTML = 'Neo Tokyo';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(2);
+    expect(container.querySelectorAll('.glitch-overlay').length).toBe(1);
+    expect(glitch.overlays.scanlines.parentNode).toBe(container);
+    // rgbSplit tints through per-clone filters applied once in setup, so a
+    // rebuild that skipped setup would paint plain grey ghosts instead.
+    expect(glitch.clones[0].style.filter).toBe('url(#glitch-filter-red)');
+    expect(glitch.clones[1].style.filter).toBe('url(#glitch-filter-cyan)');
+    // start() is what reveals the clones, so a mid-run rebuild must show them.
+    expect(glitch.clones.every((clone) => clone.style.display === 'block')).toBe(true);
+
     glitch.destroy();
   });
 });

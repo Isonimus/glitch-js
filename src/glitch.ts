@@ -479,7 +479,18 @@ export class Glitch {
       // Our own writes are mirrored into clones at write time, so only an
       // external content change needs a clone rebuild.
       const hasExternalMutation = mutations.some((m) => !isOwnMutation(m));
-      if (hasExternalMutation) {
+      if (!hasExternalMutation) return;
+
+      // A wholesale content replacement (`element.innerHTML = ...`) takes the
+      // injected clones and overlays with it. Syncing into nodes that are no
+      // longer in the document would leave every clone- and overlay-based
+      // effect rendering nothing, with no error to show for it.
+      const isDetached = this.injectedNodes().some(
+        (node) => node.parentNode !== this.element
+      );
+      if (isDetached) {
+        this.reinjectEffectNodes();
+      } else {
         this.syncClones();
       }
     });
@@ -505,6 +516,46 @@ export class Glitch {
 
     if (this.options.active && this.options.trigger === 'always') {
       this.start();
+    }
+  }
+
+  /** The clones and effect overlays this instance injected into the element. */
+  injectedNodes(): HTMLElement[] {
+    return [...this.clones, ...Object.values(this.overlays)];
+  }
+
+  /**
+   * Rebuilds the injected DOM after an external content replacement detached
+   * it. The old nodes are removed and both records cleared first, which keeps
+   * every effect's `setup` a create-only path: it can re-inject without
+   * duplicating an overlay or leaking the node it replaces.
+   */
+  reinjectEffectNodes(): void {
+    const previousCloneCount = this.clones.length;
+
+    this.clones.forEach((clone) => clone.remove());
+    this.clones = [];
+    Object.values(this.overlays).forEach((overlay) => overlay.remove());
+    this.overlays = {};
+
+    for (const effect of this.options.effects) {
+      if (effect.setup) {
+        effect.setup(this);
+      }
+    }
+
+    // Clones can also be created directly, without an effect owning them, in
+    // which case no `setup` call brings them back.
+    if (this.clones.length === 0 && previousCloneCount > 0) {
+      this.createClones(previousCloneCount);
+    }
+
+    // `start()` is what normally reveals the clones, so a rebuild mid-run has
+    // to do it here or the effect stays invisible until the next start.
+    if (this.isRunning) {
+      this.clones.forEach((clone) => {
+        clone.style.display = 'block';
+      });
     }
   }
 
