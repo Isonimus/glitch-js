@@ -506,6 +506,128 @@ describe('Glitch.js decrypt effect', () => {
     glitch.destroy();
   });
 
+  // CSS collapses every run of white space to a single space and trims it at
+  // the edges of a block, so this is the length the browser actually paints.
+  const renderedLength = (text: string): number => text.replace(/\s+/g, ' ').trim().length;
+
+  it('should not change the rendered length of indented markup', () => {
+    container.innerHTML =
+      '<div class="header">\n' +
+      '  <span class="dot"></span>\n' +
+      '  <span class="title">DECRYPT_STREAM</span>\n' +
+      '</div>\n' +
+      '<div class="line">> ACCESS DENIED</div>';
+    const original = container.textContent ?? '';
+
+    const fx = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    // The invariant has to hold at every step, not just at the end: masking
+    // source indentation paints characters the browser otherwise collapses,
+    // lengthening the first line and adding line boxes of its own. A forward
+    // reveal re-locks the leading indentation early, so a mid-reveal check
+    // alone would miss it.
+    for (const time of [0, 225, 450, 675, 900]) {
+      driveUpdate(fx, glitch, time);
+      expect(renderedLength(container.textContent ?? '')).toBe(renderedLength(original));
+    }
+
+    glitch.destroy();
+  });
+
+  it('should leave whitespace-only text nodes untouched', () => {
+    container.innerHTML = '<span>ONE</span>\n  <span>TWO</span>';
+    const spacer = container.childNodes[1] as Text;
+    expect(spacer.textContent).toBe('\n  ');
+
+    const fx = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+
+    // A whitespace-only node is dropped outright by a flex or grid parent, so
+    // masking it would add an item that was not there.
+    expect(spacer.textContent).toBe('\n  ');
+    expect(container.textContent).toBe('###\n  ###');
+    glitch.destroy();
+  });
+
+  it('should mask whitespace runs only when told the target is preformatted', () => {
+    container.innerHTML = '  AB   CD';
+
+    // Collapsing layout renders neither the leading pair nor the interior run
+    // as three spaces, so masking them would lengthen the line.
+    const collapsing = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const first = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [collapsing],
+    });
+    driveUpdate(collapsing, first, 0);
+    expect(container.textContent).toBe('  ##   ##');
+    first.destroy();
+
+    // Declared preformatted: every space is painted, so all of it can mask.
+    const preformatted = Effects.decrypt({
+      characters: MASK,
+      duration: 900,
+      rollInterval: 0,
+      preformatted: true,
+    });
+    const second = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [preformatted],
+    });
+    driveUpdate(preformatted, second, 0);
+    expect(container.textContent).toBe('#########');
+    second.destroy();
+  });
+
+  it('should keep tabs, line breaks and whitespace-only nodes out of a preformatted mask', () => {
+    container.innerHTML = 'AB\t\nCD<span>ONE</span>\n  <span>TWO</span>';
+    const fx = Effects.decrypt({
+      characters: MASK,
+      duration: 900,
+      rollInterval: 0,
+      preformatted: true,
+    });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+
+    // A tab advances to a tab stop and a line break ends the line, so neither
+    // is one character wide; a whitespace-only node is dropped by flex layout.
+    expect(container.textContent).toBe('##\t\n#####\n  ###');
+    glitch.destroy();
+  });
+
+  it('should mask non-breaking spaces, which layout always paints', () => {
+    container.innerHTML = 'AB\u00a0\u00a0CD';
+    const fx = Effects.decrypt({ characters: MASK, duration: 900, rollInterval: 0 });
+    const glitch = new Glitch(container, { active: false, trigger: 'manual', effects: [fx] });
+
+    driveUpdate(fx, glitch, 0);
+    expect(container.textContent).toBe('######');
+    glitch.destroy();
+
+    const preserved = Effects.decrypt({
+      characters: MASK,
+      duration: 900,
+      rollInterval: 0,
+      maskWhitespace: false,
+    });
+    const second = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [preserved],
+    });
+
+    driveUpdate(preserved, second, 0);
+    expect(container.textContent).toBe('##\u00a0\u00a0##');
+    second.destroy();
+  });
+
   it('should reveal continuously across inline markup', () => {
     container.innerHTML = 'Neo <span>Tokyo</span>';
     const fx = Effects.decrypt({

@@ -188,6 +188,7 @@ const reveal = new Glitch(headline, {
       rollInterval: 40,         // How fast the unlocked characters re-roll
       revealOrder: 'forward',   // 'random' locks positions in a scattered order
       maskWhitespace: true,     // Hide word boundaries so it reads as ciphertext
+      preformatted: false,      // true only if the target preserves whitespace
       onComplete: () => headline.classList.add('is-decrypted')
     })
   ]
@@ -252,10 +253,13 @@ Replaces the text with a same-length string of rolling characters, then locks th
 - `duration` (`number`, default: `2000`): Milliseconds for the full reveal, from fully masked to fully readable.
 - `rollInterval` (`number`, default: `50`): Milliseconds between re-rolls of the still-masked characters. Rolling on every frame reads as blur rather than as rolling, so this is deliberately slower than the frame rate.
 - `revealOrder` (`'forward' | 'random'`, default: `'forward'`): Whether positions lock left to right, or in a random order.
-- `maskWhitespace` (`boolean`, default: `true`): Whether inline spaces are masked too. `true` hides word boundaries, so the masked text reads as ciphertext; `false` keeps the word shapes visible. Line breaks and tabs are never masked, since they carry layout in pre-formatted text.
+- `maskWhitespace` (`boolean`, default: `true`): Whether rendered spaces are masked too. `true` hides word boundaries, so the masked text reads as ciphertext; `false` keeps the word shapes visible. Only whitespace the browser actually paints is ever masked: a single space between two non-whitespace characters, and non-breaking spaces. Whitespace runs, leading and trailing whitespace, line breaks and tabs are left alone, because layout collapses them — masking one of those would paint a character where the browser paints none, lengthening the line and adding line boxes for the length of the reveal. Source indentation in hand-formatted markup is the usual case, and in a flex or grid row whitespace-only text nodes are dropped entirely, so masking them would insert items.
+- `preformatted` (`boolean`, default: `false`): Declares that the target renders whitespace verbatim — `white-space: pre`, `pre-wrap`, `break-spaces`, or a `<pre>` element. Then `maskWhitespace` masks whitespace runs and indentation too, since layout paints all of it. It is an explicit option rather than something the library detects, because a detected version could not be tested: `getComputedStyle` reports no usable `white-space` under jsdom. Tabs, line breaks, and whitespace-only text nodes stay out of the mask even when this is `true` — a tab advances to the next tab stop and a line break ends the line, so neither is one character wide.
 - `onComplete` (`() => void`, optional): Called once each time a reveal finishes.
 
 Unlike the other modules this effect is **finite**: it runs to completion and then stops doing work. Its `reset` hook — which `stop()` calls — rearms it, so `hover` and `click` triggers replay the reveal, and `manual` triggers can replay it with `stop()` followed by `start()`.
+
+> **Note:** in a `white-space: pre` container (a `<pre>` block or ASCII art) every space *is* painted, so the rule above leaves the runs used for column alignment visible. Pass `preformatted: true` to mask those as well.
 
 > **Note:** because every character is replaced by another of the same count rather than the same width, a proportional font will reflow slightly on each roll. Use a monospace font (or `font-variant-numeric: tabular-nums` for digits) for a reveal that holds its layout still.
 
