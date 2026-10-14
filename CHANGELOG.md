@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`Glitch.removeClones()`**: Removes every clone the instance injected and stops tracking them. Clone teardown previously lived inline in `createClones` and `destroy`; it is now one method, which a clone-based effect calls from its `cleanup` hook.
+
+### Fixed
+- **`rgbSplit` and `slice` Left Their Clones Behind**: Both create clones in `setup` and defined `reset` but no `cleanup`, so `updateOptions` with an effect list that no longer held them kept the clones — and the `start()` that follows reveals every tracked clone, so the orphans reappeared as full-colour copies still blended with `screen`, washing the element out. Only `destroy()` cleared them. Both effects now remove their clones in `cleanup`, as `scanlines` and `hologram` already did for their overlays. Dropping one of two clone-sharing effects stays safe, because `cleanup` runs before the survivor's `setup` claims its own.
+- **Channel Filters Lost on the First Stop**: `stop()` blanked the `filter` on every clone, a style it never set. `rgbSplit` applies its channel filters once, in `setup`, so the first stop stripped them permanently while the `screen` blend mode it also set stayed: on a `hover` or `click` trigger the effect rendered correctly on the first activation only, and washed the element out on every one after. `stop()` now clears only what the update loop painted — transform, clip-path and opacity — and leaves styling an effect established in `setup` to the effect.
+- **`destroy()` Kept Stale Clone References**: It removed the clone and overlay nodes from the DOM but left both records populated.
+
 ## [2.0.0] - 2026-09-08
 
 ### Added

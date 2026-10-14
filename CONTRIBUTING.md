@@ -34,6 +34,7 @@ When modifying code:
 - Ensure all logic remains dependency-free.
 - Target modern browsers (using native ES6+ features and ES Modules).
 - Optimize for performance (keep DOM operations minimal inside the `requestAnimationFrame` render loop).
+- An effect that injects DOM removes it again in `cleanup`: clones through `removeClones()`, overlays by removing the nodes it stored. `updateOptions` runs `cleanup` on the effects it drops, so anything left behind survives into the next `start()`. Styling applied in `setup` rather than per frame — a filter, a blend mode — belongs to the effect and is not cleared by `stop()`.
 - Keep per-instance effect state in a `WeakMap<Glitch, T>` scoped to the effect factory, as `Effects.decrypt()` does, rather than on the instance. It stays fully typed, it dies with the instance, and one effect object can be shared across several instances without their state interfering.
 
 ## Submitting a Pull Request

@@ -558,11 +558,20 @@ export class Glitch {
     }
   }
 
+  /**
+   * Removes every clone this instance injected and stops tracking them. An
+   * effect that created clones calls this from its `cleanup` hook, so that
+   * `updateOptions` dropping it does not leave overlays behind for the next
+   * `start()` to reveal.
+   */
+  removeClones(): void {
+    this.clones.forEach((clone) => clone.remove());
+    this.clones = [];
+  }
+
   // Clones the target element to overlay on top of itself
   createClones(count: number = 2): void {
-    // Clean up existing clones first
-    this.clones.forEach((c) => c.remove());
-    this.clones = [];
+    this.removeClones();
 
     const computed = window.getComputedStyle(this.element);
 
@@ -826,13 +835,17 @@ export class Glitch {
 
     this.restoreManagedText();
 
-    // Hide and reset all clones
-    this.clones.forEach((c) => {
-      c.style.display = 'none';
-      c.style.transform = '';
-      c.style.clipPath = '';
-      c.style.opacity = '';
-      c.style.filter = '';
+    // Hide the clones and drop what the update loop painted on them. Styling
+    // an effect established in `setup` -- rgbSplit's channel filters and blend
+    // mode -- is left alone: it belongs to the effect for as long as the effect
+    // is installed, and clearing the filter here meant every hover after the
+    // first showed unfiltered copies. A dropped effect takes its clones with
+    // it through `cleanup`, so nothing stale survives it either.
+    this.clones.forEach((clone) => {
+      clone.style.display = 'none';
+      clone.style.transform = '';
+      clone.style.clipPath = '';
+      clone.style.opacity = '';
     });
 
     // Run reset functions for effects
@@ -890,8 +903,9 @@ export class Glitch {
     }
 
     // Remove clones and overlays from DOM
-    this.clones.forEach((c) => c.remove());
+    this.removeClones();
     Object.values(this.overlays).forEach((o) => o.remove());
+    this.overlays = {};
 
     // Restore original styles
     this.element.style.position = this.originalStyles.position || '';
@@ -975,6 +989,12 @@ export const Effects = {
           instance.clones[1].style.opacity = '';
         }
       },
+      // The clones carry this effect's channel filters and blend mode, so they
+      // have to go with it. A clone-based effect that remains claims its own in
+      // the `setup` pass that follows.
+      cleanup(instance) {
+        instance.removeClones();
+      },
     };
   },
 
@@ -1035,6 +1055,11 @@ export const Effects = {
           clone.style.clipPath = '';
           clone.style.transform = '';
         });
+      },
+      // Same reasoning as rgbSplit: this effect asked for the clones, so it
+      // takes them with it rather than leaving them for the next `start()`.
+      cleanup(instance) {
+        instance.removeClones();
       },
     };
   },

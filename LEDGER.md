@@ -13,12 +13,14 @@ the right single owner: suppress or soften the motion-heavy effects while the qu
 matches, follow the query's `change` event, and let callers opt out explicitly where the
 motion is the content.
 
-## Defect — `rgbSplit` leaves its clones behind when `updateOptions` drops it
+## Clone ownership belongs to the engine, not to the effects — [#6](https://github.com/Isonimus/glitch-js/issues/6)
 
-`rgbSplit` creates two clones in `setup` and defines `reset` but no `cleanup`, so
-`updateOptions` with an effect list that no longer holds it keeps both clones — and the
-`start()` that follows shows them unfiltered, still screen-blended over the element, which
-brightens it. `slice` shares the clones and has the same gap. Only `destroy()` removes them.
-Fix: give both a `cleanup` that removes the clones (or have `updateOptions` drop clones no
-remaining effect claims), with a regression test that swaps `rgbSplit` out via
-`updateOptions` and asserts no `.glitch-clone` remains.
+`rgbSplit` and `slice` remove the clones in their `cleanup` hooks, which fixes the leak
+when `updateOptions` drops them, but ownership still sits in the effects: the fix relies on
+`cleanup` running before the surviving effect's `setup`, and `removeClones()` tears down
+every clone rather than "its two". Moving ownership into the engine needs a way for an
+effect to declare it wants clones — a flag on `GlitchEffect`, or reference counting — which
+is new public surface, so it was left out of a bug fix. Promoted to #6 so a contributor can
+take it.
+
+Deferred from the clone cleanup fix (2026-10-14).
