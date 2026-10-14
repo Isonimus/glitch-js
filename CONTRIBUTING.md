@@ -37,7 +37,8 @@ When modifying code:
 - Every effect that moves something checks `instance.motionReduced` in its `update` and
   takes a still path when it is set. Stopping painting is enough where `reset` undoes what
   the effect wrote; keep the static part of the look where there is one.
-- An effect that injects DOM removes it again in `cleanup`: clones through `removeClones()`, overlays by removing the nodes it stored. `updateOptions` runs `cleanup` on the effects it drops, so anything left behind survives into the next `start()`. Styling applied in `setup` rather than per frame — a filter, a blend mode — belongs to the effect and is not cleared by `stop()`.
+- An effect that needs overlay clones declares `clones: n` on its `GlitchEffect` and never creates or removes them itself. The engine sizes one shared pool to the largest count any active effect declares, builds it before the first `setup`, and releases it when the last declaring effect goes. Because the pool is shared, an effect clears only its own paint in `cleanup` — the filter and blend mode `rgbSplit` applies, the clipping `slice` applies — and leaves the clones standing for whatever still needs them.
+- An effect that injects DOM of its own — an overlay — removes it again in `cleanup`. `updateOptions` runs `cleanup` on the effects it drops, so anything left behind survives into the next `start()`. Styling applied in `setup` rather than per frame — a filter, a blend mode — belongs to the effect and is not cleared by `stop()`.
 - Keep per-instance effect state in a `WeakMap<Glitch, T>` scoped to the effect factory, as `Effects.decrypt()` does, rather than on the instance. It stays fully typed, it dies with the instance, and one effect object can be shared across several instances without their state interfering.
 
 ## Submitting a Pull Request

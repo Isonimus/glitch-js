@@ -6,6 +6,15 @@
 // Interface definitions for configuration options
 export interface GlitchEffect {
   name: string;
+  /**
+   * How many overlay clones this effect paints on. The engine owns the pool:
+   * it sizes it to the largest count any active effect declares, builds it
+   * before the first `setup` runs, and removes it once no active effect asks
+   * for one. An effect therefore never creates or destroys clones itself -- it
+   * only paints the ones it finds, and clears its own paint in `cleanup`,
+   * because the pool may outlive it to serve another effect.
+   */
+  clones?: number;
   setup?: (instance: Glitch) => void;
   update?: (instance: Glitch, time: number) => void;
   reset?: (instance: Glitch) => void;
@@ -538,6 +547,11 @@ export class Glitch {
 
     this.connectMotionPreference();
 
+    // Before the first `setup`, so a declaring effect finds its clones ready
+    // to paint. It also runs after `updateOptions` has cleaned up the dropped
+    // effects, which is where a pool nothing declares any more is released.
+    this.syncClonePool();
+
     // Initialize each registered effect
     for (const effect of this.options.effects) {
       if (effect.setup) {
@@ -570,6 +584,8 @@ export class Glitch {
     this.clones = [];
     Object.values(this.overlays).forEach((overlay) => overlay.remove());
     this.overlays = {};
+
+    this.syncClonePool();
 
     for (const effect of this.options.effects) {
       if (effect.setup) {
@@ -634,10 +650,32 @@ export class Glitch {
   }
 
   /**
+   * Sizes the clone pool to what the active effects declare, before any of
+   * their `setup` hooks run. Effects that need the same clones share one pool,
+   * so the count is the largest any of them asks for rather than their sum.
+   * Leaving the size alone when it already matches is what lets the pool
+   * survive an `updateOptions` that still needs it, instead of being torn down
+   * and rebuilt under the reader.
+   */
+  private syncClonePool(): void {
+    const declared = this.options.effects.map((effect) => effect.clones ?? 0);
+    const needed = declared.length > 0 ? Math.max(...declared) : 0;
+
+    if (needed === 0) {
+      this.removeClones();
+      return;
+    }
+    if (this.clones.length !== needed) {
+      this.createClones(needed);
+    }
+  }
+
+  /**
    * Removes every clone this instance injected and stops tracking them. An
-   * effect that created clones calls this from its `cleanup` hook, so that
-   * `updateOptions` dropping it does not leave overlays behind for the next
-   * `start()` to reveal.
+   * effect that creates its own clones with `createClones` -- rather than
+   * declaring `clones` and letting the engine build the pool -- calls this from
+   * its `cleanup` hook, so that `updateOptions` dropping it does not leave
+   * overlays behind for the next `start()` to reveal.
    */
   removeClones(): void {
     this.clones.forEach((clone) => clone.remove());
@@ -1011,8 +1049,8 @@ export const Effects = {
 
     return {
       name: 'rgbSplit',
+      clones: 2,
       setup(instance) {
-        instance.createClones(2);
         if (instance.clones[0]) {
           instance.clones[0].style.filter = 'url(#glitch-filter-red)';
           instance.clones[0].style.mixBlendMode = opts.blendMode;
@@ -1081,11 +1119,16 @@ export const Effects = {
           instance.clones[1].style.opacity = '';
         }
       },
-      // The clones carry this effect's channel filters and blend mode, so they
-      // have to go with it. A clone-based effect that remains claims its own in
-      // the `setup` pass that follows.
+      // The clones may outlive this effect, serving one that still declares
+      // them, so what this effect painted on them comes off rather than the
+      // clones themselves. The engine releases the pool when nobody is left.
       cleanup(instance) {
-        instance.removeClones();
+        instance.clones.forEach((clone) => {
+          clone.style.filter = '';
+          clone.style.mixBlendMode = '';
+          clone.style.transform = '';
+          clone.style.opacity = '';
+        });
       },
     };
   },
@@ -1107,11 +1150,7 @@ export const Effects = {
 
     return {
       name: 'slice',
-      setup(instance) {
-        if (instance.clones.length < 2) {
-          instance.createClones(2);
-        }
-      },
+      clones: 2,
       update(instance) {
         const multiplier = opts.mouseInteract
           ? 1 + instance.mouseVelocity * opts.mouseSensitivity
@@ -1150,10 +1189,14 @@ export const Effects = {
           clone.style.transform = '';
         });
       },
-      // Same reasoning as rgbSplit: this effect asked for the clones, so it
-      // takes them with it rather than leaving them for the next `start()`.
+      // Same reasoning as rgbSplit: the clones can outlive this effect, so it
+      // clears its own clipping and displacement and leaves the pool alone.
       cleanup(instance) {
-        instance.removeClones();
+        instance.clones.forEach((clone) => {
+          clone.style.clipPath = '';
+          clone.style.transform = '';
+          clone.style.opacity = '';
+        });
       },
     };
   },
