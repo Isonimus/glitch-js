@@ -18,6 +18,16 @@ export interface GlitchOptions {
   effects?: GlitchEffect[];
   trigger?: GlitchTrigger;
   active?: boolean;
+  /**
+   * Whether to honour the operating system's `prefers-reduced-motion: reduce`
+   * setting, which is on by default. While the setting is active each effect
+   * holds still: the motion-heavy ones stop moving, the decorative overlays
+   * stay put, and `decrypt` shows its plaintext instead of animating to it.
+   * Set it to `false` only where the motion *is* the content and a static
+   * element would convey nothing -- that choice overrides an accessibility
+   * preference the reader has deliberately set, so it needs a reason.
+   */
+  respectReducedMotion?: boolean;
 }
 
 export interface RGBSplitOptions {
@@ -89,6 +99,17 @@ export interface DecryptOptions {
   preformatted?: boolean;
   onComplete?: () => void;
 }
+
+// Readers who ask their OS for less motion get a still version of every effect.
+// Flicker is the reason this is not merely a preference: a flashing element is
+// a photosensitivity risk (WCAG 2.3.1), so it stops outright rather than slowing.
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+// A still channel split, for rgbSplit while motion is reduced: half the
+// configured excursion reads as a colour fringe without implying movement, and
+// a fixed opacity in the middle of the range the animated path draws from.
+const REDUCED_MOTION_SPLIT_RATIO = 0.5;
+const REDUCED_MOTION_SPLIT_OPACITY = 0.6;
 
 // Helper to ensure the custom SVG filters for RGB Split are injected into the document body
 const ensureSvgFilters = (): void => {
@@ -408,6 +429,12 @@ export class Glitch {
   overlays: Record<string, HTMLElement> = {};
   originalStyles: { position?: string; overflow?: string } = {};
 
+  /**
+   * True while the reader asks for reduced motion and this instance honours it.
+   * Effects read it on every frame to pick their still path.
+   */
+  motionReduced: boolean = false;
+
   observer: MutationObserver | null = null;
   intersectionObserver: IntersectionObserver | null = null;
   mouseVelocity: number = 0;
@@ -415,6 +442,8 @@ export class Glitch {
   lastMouseY: number = 0;
   lastMouseTime: number = 0;
 
+  private reducedMotionQuery: MediaQueryList | null = null;
+  private boundMotionPreferenceChange: () => void;
   private boundMouseMove: (e: MouseEvent) => void;
   private boundMouseLeave: () => void;
   private boundStart?: () => void;
@@ -431,8 +460,11 @@ export class Glitch {
       effects: [],
       trigger: 'always',
       active: true,
+      respectReducedMotion: true,
       ...options,
     };
+
+    this.boundMotionPreferenceChange = () => this.applyMotionPreference();
 
     // Event handlers for mouse velocity tracking
     this.boundMouseMove = (e: MouseEvent) => {
@@ -504,6 +536,8 @@ export class Glitch {
     this.element.addEventListener('mousemove', this.boundMouseMove);
     this.element.addEventListener('mouseleave', this.boundMouseLeave);
 
+    this.connectMotionPreference();
+
     // Initialize each registered effect
     for (const effect of this.options.effects) {
       if (effect.setup) {
@@ -555,6 +589,47 @@ export class Glitch {
       this.clones.forEach((clone) => {
         clone.style.display = 'block';
       });
+    }
+  }
+
+  /**
+   * Starts tracking the reader's motion preference, replacing any previous
+   * subscription so that `init()` can run again without stacking listeners.
+   */
+  connectMotionPreference(): void {
+    this.disconnectMotionPreference();
+    this.reducedMotionQuery = window.matchMedia(REDUCED_MOTION_QUERY);
+    this.motionReduced = this.options.respectReducedMotion && this.reducedMotionQuery.matches;
+    this.reducedMotionQuery.addEventListener('change', this.boundMotionPreferenceChange);
+  }
+
+  disconnectMotionPreference(): void {
+    if (!this.reducedMotionQuery) return;
+    this.reducedMotionQuery.removeEventListener('change', this.boundMotionPreferenceChange);
+    this.reducedMotionQuery = null;
+  }
+
+  /**
+   * Re-reads the preference after the OS setting changes mid-run. The effects'
+   * still paths stop painting rather than painting something neutral, so what
+   * the moving paths already put on the element has to come off here -- which
+   * is exactly what the `reset` hooks are for.
+   */
+  applyMotionPreference(): void {
+    if (!this.reducedMotionQuery) {
+      throw new Error(
+        'Glitch: motion preference changed while no media query was connected.'
+      );
+    }
+
+    const reduced = this.options.respectReducedMotion && this.reducedMotionQuery.matches;
+    if (reduced === this.motionReduced) return;
+    this.motionReduced = reduced;
+
+    for (const effect of this.options.effects) {
+      if (effect.reset) {
+        effect.reset(this);
+      }
     }
   }
 
@@ -891,6 +966,8 @@ export class Glitch {
       this.observer = null;
     }
 
+    this.disconnectMotionPreference();
+
     // Remove mouse event listeners
     this.element.removeEventListener('mousemove', this.boundMouseMove);
     this.element.removeEventListener('mouseleave', this.boundMouseLeave);
@@ -946,6 +1023,21 @@ export const Effects = {
         }
       },
       update(instance) {
+        if (instance.motionReduced) {
+          // Held apart rather than jittering: the fringe survives, the motion
+          // does not. The mouse multiplier is motion too, so it stays out.
+          const stillOffset = opts.maxOffset * REDUCED_MOTION_SPLIT_RATIO;
+          if (instance.clones[0]) {
+            instance.clones[0].style.transform = `translateX(${-stillOffset}px)`;
+            instance.clones[0].style.opacity = REDUCED_MOTION_SPLIT_OPACITY.toString();
+          }
+          if (instance.clones[1]) {
+            instance.clones[1].style.transform = `translateX(${stillOffset}px)`;
+            instance.clones[1].style.opacity = REDUCED_MOTION_SPLIT_OPACITY.toString();
+          }
+          return;
+        }
+
         const multiplier = opts.mouseInteract
           ? 1 + instance.mouseVelocity * opts.mouseSensitivity
           : 1;
@@ -1028,7 +1120,9 @@ export const Effects = {
         const effectiveFreq = Math.min(1, opts.frequency * multiplier);
         const effectiveOffset = opts.maxOffset * multiplier;
 
-        if (Math.random() < effectiveFreq) {
+        // Reduced motion takes the same branch as a frame that happens not
+        // to slice, so there is one quiet path rather than two.
+        if (!instance.motionReduced && Math.random() < effectiveFreq) {
           instance.clones.forEach((clone) => {
             const top = Math.random() * 80;
             const height = Math.random() * 20;
@@ -1079,6 +1173,8 @@ export const Effects = {
     return {
       name: 'scramble',
       update(instance) {
+        if (instance.motionReduced) return;
+
         const managed = instance.readManagedText();
 
         if (Math.random() >= opts.frequency) {
@@ -1141,6 +1237,20 @@ export const Effects = {
           stateByInstance.set(instance, state);
         }
 
+        // Reduced motion lands on the text instead of animating towards it,
+        // which is the still equivalent of a finished reveal. `onComplete`
+        // still fires exactly once, so a caller's completion hook does not
+        // quietly depend on whether the reader allows motion.
+        if (instance.motionReduced) {
+          if (state.isComplete) return;
+          state.isLocked.fill(true);
+          state.lockedCount = state.revealOrder.length;
+          instance.writeManagedText(managed, managed.original);
+          state.isComplete = true;
+          opts.onComplete?.();
+          return;
+        }
+
         // The reveal is complete: leave the plaintext alone instead of
         // rewriting an identical string on every remaining frame.
         if (state.isComplete) return;
@@ -1196,6 +1306,8 @@ export const Effects = {
     return {
       name: 'shake',
       update(instance) {
+        if (instance.motionReduced) return;
+
         const multiplier = opts.mouseInteract
           ? 1 + instance.mouseVelocity * opts.mouseSensitivity
           : 1;
@@ -1232,6 +1344,8 @@ export const Effects = {
     return {
       name: 'flicker',
       update(instance) {
+        if (instance.motionReduced) return;
+
         if (Math.random() < opts.frequency) {
           const brightness = Math.random() * 1.5 + 0.5;
           const opacity = Math.random() * (1 - opts.minOpacity) + opts.minOpacity;
@@ -1286,9 +1400,19 @@ export const Effects = {
         instance.overlays.scanlines = overlay;
       },
       update(instance, time) {
+        if (instance.motionReduced) return;
+
         if (opts.pulse && instance.overlays.scanlines) {
           const pulseVal = Math.sin(time / 150) * 0.04 + opts.opacity;
           instance.overlays.scanlines.style.opacity = pulseVal.toString();
+        }
+      },
+      reset(instance) {
+        // The overlay is static decoration and stays; only the pulse has to be
+        // undone, back to the configured resting opacity. Without this, a
+        // stopped instance kept whatever opacity the last frame happened to set.
+        if (instance.overlays.scanlines) {
+          instance.overlays.scanlines.style.opacity = opts.opacity.toString();
         }
       },
       cleanup(instance) {
@@ -1371,6 +1495,22 @@ export const Effects = {
         instance.overlays.hologramScan = scanWrap;
       },
       update(instance, time) {
+        if (instance.motionReduced) {
+          // The tint, banding and glow are the projection; the float, the sweep
+          // and the dropout flashes are the motion. Keep the first, park the rest.
+          instance.element.style.transform = '';
+          instance.element.style.opacity = opts.opacity.toString();
+          if (instance.overlays.hologramTint) {
+            instance.overlays.hologramTint.style.transform = '';
+          }
+          const parkedBand = instance.overlays.hologramScan
+            ?.firstElementChild as HTMLElement | null;
+          if (parkedBand) {
+            parkedBand.style.top = '0';
+          }
+          return;
+        }
+
         // Gentle vertical hover using a smooth sine wave
         const float = Math.sin(time / 600) * opts.floatAmplitude;
 

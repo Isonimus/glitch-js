@@ -822,3 +822,250 @@ describe('Glitch.js decrypt effect', () => {
     glitch.destroy();
   });
 });
+
+describe('Glitch.js reduced motion', () => {
+  let container: HTMLDivElement;
+
+  interface MotionPreferenceStub {
+    /** Flips the OS setting and notifies whoever subscribed, as a browser would. */
+    setReduced: (reduced: boolean) => void;
+    listenerCount: () => number;
+  }
+
+  const stubMotionPreference = (reducedAtStart: boolean): MotionPreferenceStub => {
+    let reduced = reducedAtStart;
+    const listeners = new Set<() => void>();
+
+    vi.stubGlobal('matchMedia', (query: string) => {
+      const list = {
+        media: query,
+        get matches() {
+          return query.includes('prefers-reduced-motion') ? reduced : false;
+        },
+        addEventListener: (_type: string, listener: () => void) => {
+          listeners.add(listener);
+        },
+        removeEventListener: (_type: string, listener: () => void) => {
+          listeners.delete(listener);
+        },
+      };
+      return list as unknown as MediaQueryList;
+    });
+
+    return {
+      setReduced(next: boolean) {
+        reduced = next;
+        listeners.forEach((listener) => listener());
+      },
+      listenerCount: () => listeners.size,
+    };
+  };
+
+  const driveFrames = (effect: GlitchEffect, glitch: Glitch, times: number[]): void => {
+    if (!effect.update) throw new Error('effect must expose an update hook');
+    for (const time of times) {
+      effect.update(glitch, time);
+    }
+  };
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    container.innerHTML = 'Cyberpunk';
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    container.remove();
+  });
+
+  it('should not reduce motion when the reader expressed no preference', () => {
+    stubMotionPreference(false);
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+    expect(glitch.motionReduced).toBe(false);
+    glitch.destroy();
+  });
+
+  it('should reduce motion while the operating system asks for it', () => {
+    stubMotionPreference(true);
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+    expect(glitch.motionReduced).toBe(true);
+    glitch.destroy();
+  });
+
+  it('should let a caller opt out where the motion is the content', () => {
+    stubMotionPreference(true);
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      respectReducedMotion: false,
+    });
+    expect(glitch.motionReduced).toBe(false);
+    glitch.destroy();
+  });
+
+  it('should hold shake and flicker completely still', () => {
+    stubMotionPreference(true);
+    // frequency 1 so both effects would paint on every single frame.
+    const shake = Effects.shake({ frequency: 1 });
+    const flicker = Effects.flicker({ frequency: 1 });
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [shake, flicker],
+    });
+
+    driveFrames(shake, glitch, [0, 16, 32]);
+    driveFrames(flicker, glitch, [0, 16, 32]);
+
+    expect(container.style.transform).toBe('');
+    expect(container.style.opacity).toBe('');
+    expect(container.style.filter).toBe('');
+    glitch.destroy();
+  });
+
+  it('should leave text uncorrupted by scramble', () => {
+    stubMotionPreference(true);
+    const scramble = Effects.scramble({ frequency: 1, scrambleChance: 1 });
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [scramble],
+    });
+
+    driveFrames(scramble, glitch, [0, 16, 32]);
+
+    expect(container.textContent).toBe('Cyberpunk');
+    glitch.destroy();
+  });
+
+  it('should split the rgbSplit clones apart without any jitter', () => {
+    stubMotionPreference(true);
+    const rgbSplit = Effects.rgbSplit({ maxOffset: 8, frequency: 1 });
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [rgbSplit],
+    });
+
+    driveFrames(rgbSplit, glitch, [0]);
+    const firstFrame = glitch.clones.map((clone) => clone.style.transform);
+    driveFrames(rgbSplit, glitch, [16, 32]);
+    const lastFrame = glitch.clones.map((clone) => clone.style.transform);
+
+    // Still, but still split: the channel fringe is the effect's identity.
+    expect(firstFrame).toEqual(lastFrame);
+    expect(firstFrame).toEqual(['translateX(-4px)', 'translateX(4px)']);
+    expect(glitch.clones[0].style.opacity).toBe('0.6');
+    expect(glitch.clones[0].style.filter).toBe('url(#glitch-filter-red)');
+    expect(glitch.clones[1].style.filter).toBe('url(#glitch-filter-cyan)');
+    glitch.destroy();
+  });
+
+  it('should never clip a slice out of the clones', () => {
+    stubMotionPreference(true);
+    const slice = Effects.slice({ frequency: 1 });
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [slice],
+    });
+
+    driveFrames(slice, glitch, [0, 16, 32]);
+
+    expect(glitch.clones.every((clone) => clone.style.clipPath === '')).toBe(true);
+    expect(glitch.clones.every((clone) => clone.style.opacity === '0')).toBe(true);
+    glitch.destroy();
+  });
+
+  it('should keep the hologram projection while parking its motion', () => {
+    stubMotionPreference(true);
+    const hologram = Effects.hologram({ opacity: 0.8, floatAmplitude: 10 });
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [hologram],
+    });
+
+    driveFrames(hologram, glitch, [0, 600, 1200]);
+
+    // The tint and the sweep band are the projection and stay in the DOM.
+    expect(glitch.overlays.hologramTint).toBeDefined();
+    expect(glitch.overlays.hologramScan).toBeDefined();
+    expect(container.style.transform).toBe('');
+    expect(container.style.opacity).toBe('0.8');
+    // Parked at the top rather than left wherever the sweep had reached; a
+    // running sweep would read as a percentage here.
+    const band = glitch.overlays.hologramScan.firstElementChild as HTMLElement;
+    expect(band.style.top).toBe('0px');
+    glitch.destroy();
+  });
+
+  it('should hold the scanline overlay at its resting opacity', () => {
+    stubMotionPreference(true);
+    const scanlines = Effects.scanlines({ opacity: 0.3, pulse: true });
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [scanlines],
+    });
+
+    driveFrames(scanlines, glitch, [0, 200, 400]);
+
+    expect(glitch.overlays.scanlines.style.opacity).toBe('0.3');
+    glitch.destroy();
+  });
+
+  it('should show the decrypt text at once and still complete exactly once', () => {
+    stubMotionPreference(true);
+    const onComplete = vi.fn();
+    const decrypt = Effects.decrypt({ characters: '#', duration: 900, onComplete });
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [decrypt],
+    });
+
+    driveFrames(decrypt, glitch, [0]);
+    expect(container.textContent).toBe('Cyberpunk');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+
+    driveFrames(decrypt, glitch, [16, 450, 900]);
+    expect(container.textContent).toBe('Cyberpunk');
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    glitch.destroy();
+  });
+
+  it('should settle what it already painted when the preference changes mid-run', () => {
+    const preference = stubMotionPreference(false);
+    const shake = Effects.shake({ frequency: 1 });
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [shake],
+    });
+
+    driveFrames(shake, glitch, [0]);
+    expect(container.style.transform).not.toBe('');
+
+    // The still paths stop painting rather than painting something neutral, so
+    // the transform already on the element has to be taken off on the change.
+    preference.setReduced(true);
+    expect(glitch.motionReduced).toBe(true);
+    expect(container.style.transform).toBe('');
+
+    driveFrames(shake, glitch, [16, 32]);
+    expect(container.style.transform).toBe('');
+    glitch.destroy();
+  });
+
+  it('should stop listening for preference changes once destroyed', () => {
+    const preference = stubMotionPreference(false);
+    const glitch = new Glitch(container, { active: false, trigger: 'manual' });
+    expect(preference.listenerCount()).toBe(1);
+
+    glitch.destroy();
+
+    expect(preference.listenerCount()).toBe(0);
+  });
+});
