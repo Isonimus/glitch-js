@@ -210,6 +210,7 @@ Instantiates the distortion engine on a target DOM element.
 | `effects` | `GlitchEffect[]` | `[]` | List of effect modules to apply (e.g. `Effects.rgbSplit()`). |
 | `trigger` | `GlitchTrigger` | `'always'` | Activation mode: `'always'`, `'hover'`, `'click'`, `'scroll'`, or `'manual'`. |
 | `active` | `boolean` | `true` | Set to `false` to prevent the engine from starting automatically. |
+| `respectReducedMotion` | `boolean` | `true` | Honour the reader's `prefers-reduced-motion: reduce` setting. See [Reduced Motion](#reduced-motion). |
 
 #### Methods
 
@@ -217,6 +218,44 @@ Instantiates the distortion engine on a target DOM element.
 - **`stop()`**: Stops the loop and resets all styles and text contents to their original state.
 - **`updateOptions(newOptions)`**: Cleanly stops, reconfigures, and restarts the engine with new options on the fly.
 - **`destroy()`**: Shuts down the engine, removes all observers/event listeners, deletes all clone overlays from the DOM, and restores original styles.
+
+---
+
+## Reduced Motion
+
+Readers who ask their operating system for less motion get a still version of every effect,
+with no configuration. The library watches `(prefers-reduced-motion: reduce)` and follows it
+live, so changing the setting while the page is open settles the effects immediately rather
+than waiting for a reload.
+
+Holding still is not the same as switching off: what makes each effect recognisable stays,
+and only the movement stops.
+
+| Effect | While motion is reduced |
+| :--- | :--- |
+| `rgbSplit` | Clones stay split by half the configured offset, with the channel filters intact. No jitter. |
+| `slice` | No slicing. |
+| `scramble` | Off — the text stays readable. |
+| `shake` | No displacement. |
+| `flicker` | Off entirely. |
+| `scanlines` | Overlay stays at its resting opacity; no pulse. |
+| `hologram` | Tint, banding and glow stay; no float, no sweep, no dropout flashes. |
+| `decrypt` | Lands on the plaintext at once. `onComplete` still fires exactly once. |
+
+`flicker` is the one that stops rather than slows: a flashing element is a photosensitivity
+risk, not merely a preference ([WCAG 2.3.1](https://www.w3.org/WAI/WCAG21/Understanding/three-flashes-or-below-threshold.html)).
+
+Where the motion *is* the content — a demo of the effect itself, say — opt out explicitly:
+
+```javascript
+const glitcher = new Glitch(target, {
+  respectReducedMotion: false,
+  effects: [Effects.rgbSplit()]
+});
+```
+
+That overrides an accessibility preference the reader deliberately set, so it wants a
+reason. A custom effect reads `instance.motionReduced` to decide its own still path.
 
 ---
 
