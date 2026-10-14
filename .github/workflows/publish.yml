@@ -1,11 +1,13 @@
 name: Publish to npm
 
+# The tag push is the only trigger. Adding `release: [published]` would double
+# up: cutting a release from the GitHub UI pushes the tag and publishes the
+# release, firing both, and the second run fails `npm publish` on a version the
+# registry already serves -- a red run against a release that worked.
 on:
   push:
     tags:
       - 'v*'
-  release:
-    types: [published]
 
 jobs:
   publish:
