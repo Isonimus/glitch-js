@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] - 2026-10-14
 
 ### Added
 - **Reduced Motion Support**: Every effect now holds still while the reader's operating system asks for reduced motion, with no configuration. The engine watches `(prefers-reduced-motion: reduce)` and follows it live, settling the effects the moment the setting changes rather than at the next reload. Holding still is not switching off: `rgbSplit` keeps its channel split without jitter, `scanlines` and `hologram` keep their overlays, tint and glow, and `decrypt` lands on its plaintext at once while still firing `onComplete` exactly once. `flicker` and `scramble` stop outright — a flashing element is a photosensitivity risk under WCAG 2.3.1, not merely a preference. A custom effect reads `instance.motionReduced` for the same purpose.
