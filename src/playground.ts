@@ -41,6 +41,8 @@ let glitchController: Glitch | null = null;
 interface Elements {
   triggerMode: HTMLSelectElement;
   engineActive: HTMLInputElement;
+  respectReducedMotion: HTMLInputElement;
+  reducedMotionNotice: HTMLElement;
   statusBadge: HTMLElement;
   activeTargetLabel: HTMLElement;
   btnManualTrigger: HTMLButtonElement;
@@ -121,6 +123,8 @@ interface Elements {
 const elements: Elements = {
   triggerMode: document.getElementById('trigger-mode') as HTMLSelectElement,
   engineActive: document.getElementById('engine-active') as HTMLInputElement,
+  respectReducedMotion: document.getElementById('respect-reduced-motion') as HTMLInputElement,
+  reducedMotionNotice: document.getElementById('reduced-motion-notice') as HTMLElement,
   statusBadge: document.getElementById('system-status') as HTMLElement,
   activeTargetLabel: document.getElementById('active-target-label') as HTMLElement,
   btnManualTrigger: document.getElementById('btn-manual-trigger') as HTMLButtonElement,
@@ -485,6 +489,7 @@ const getGlitchOptionsFromUI = () => {
     effects: activeEffects,
     trigger: elements.triggerMode.value,
     active: elements.engineActive.checked,
+    respectReducedMotion: elements.respectReducedMotion.checked,
   };
 };
 
@@ -519,7 +524,11 @@ const updateCodeSnippet = (): void => {
 <span class="keyword">const</span> target = <span class="keyword">document</span>.querySelector(<span class="string">'${escapeHtml(targetSel)}'</span>);
 <span class="keyword">const</span> glitcher = <span class="keyword">new</span> <span class="class-name">Glitch</span>(target, {
   <span class="property">trigger</span>: <span class="string">'${escapeHtml(opts.trigger)}'</span>,
-  <span class="property">active</span>: <span class="number">${opts.active}</span>,
+  <span class="property">active</span>: <span class="number">${opts.active}</span>,${
+    opts.respectReducedMotion
+      ? ''
+      : `\n  <span class="property">respectReducedMotion</span>: <span class="number">false</span>,`
+  }
   <span class="property">effects</span>: ${escapeHtml(effectsString)}
 });`;
 
@@ -635,6 +644,7 @@ const updateGlitchInstance = (): void => {
     glitchController = new Glitch(activeTarget, {
       trigger: parseMarkupValue(opts.trigger, GLITCH_TRIGGERS, 'trigger mode'),
       active: true,
+      respectReducedMotion: opts.respectReducedMotion,
       effects: realEffects,
     });
 
@@ -708,6 +718,21 @@ elements.triggerMode.addEventListener('change', () => {
 elements.engineActive.addEventListener('change', () => {
   updateGlitchInstance();
 });
+
+const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+const updateReducedMotionNotice = (): void => {
+  const isHoldingStill = reducedMotionQuery.matches && elements.respectReducedMotion.checked;
+  elements.reducedMotionNotice.style.display = isHoldingStill ? 'block' : 'none';
+};
+
+elements.respectReducedMotion.addEventListener('change', () => {
+  updateReducedMotionNotice();
+  updateGlitchInstance();
+});
+
+reducedMotionQuery.addEventListener('change', updateReducedMotionNotice);
+updateReducedMotionNotice();
 
 // Toggle Play/Pause Engine Button
 elements.btnTogglePlay.addEventListener('click', () => {
