@@ -109,6 +109,81 @@ describe('Glitch.js Core Engine', () => {
     glitch.destroy();
   });
 
+  it('should build the clones a declaring effect needs before its setup runs', () => {
+    let clonesSeenInSetup = -1;
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [
+        {
+          name: 'declares-clones',
+          clones: 2,
+          setup(instance) {
+            clonesSeenInSetup = instance.clones.length;
+          },
+        },
+      ],
+    });
+
+    // The effect declares what it paints on and finds it ready; it never has
+    // to create the pool itself.
+    expect(clonesSeenInSetup).toBe(2);
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(2);
+
+    glitch.destroy();
+  });
+
+  it('should size the clone pool to the largest count any effect declares', () => {
+    const glitch = new Glitch(container, {
+      active: false,
+      trigger: 'manual',
+      effects: [Effects.rgbSplit(), { name: 'wants-three', clones: 3 }],
+    });
+
+    // Effects share one pool, so the counts are not summed.
+    expect(glitch.clones.length).toBe(3);
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(3);
+
+    glitch.destroy();
+  });
+
+  it('should keep the same clones across an options update that still needs them', () => {
+    const glitch = new Glitch(container, {
+      active: true,
+      trigger: 'always',
+      effects: [Effects.rgbSplit(), Effects.slice()],
+    });
+    const originalClones = [...glitch.clones];
+    expect(originalClones.length).toBe(2);
+
+    glitch.updateOptions({ trigger: 'hover' });
+
+    // Tearing the pool down and rebuilding it for an update that changed
+    // nothing about the clones drops a frame of the effect for no reason.
+    expect(glitch.clones).toEqual(originalClones);
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(2);
+
+    glitch.destroy();
+  });
+
+  it('should release the clone pool when the last effect declaring it is dropped', () => {
+    const glitch = new Glitch(container, {
+      active: true,
+      trigger: 'always',
+      effects: [{ name: 'declares-clones', clones: 2 }],
+    });
+    expect(glitch.clones.length).toBe(2);
+
+    glitch.updateOptions({ effects: [Effects.shake()] });
+
+    // The effect has no cleanup of its own: the engine built the pool, so the
+    // engine is what releases it.
+    expect(glitch.clones.length).toBe(0);
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(0);
+
+    glitch.destroy();
+  });
+
   it('should trigger start and stop cycles correctly', () => {
     const glitch = new Glitch(container, {
       active: false,
@@ -262,6 +337,7 @@ describe('Glitch.js Built-in Effects factories', () => {
   it('should create rgbSplit effect structure', () => {
     const fx = Effects.rgbSplit();
     expect(fx.name).toBe('rgbSplit');
+    expect(fx.clones).toBe(2);
     expect(typeof fx.setup).toBe('function');
     expect(typeof fx.update).toBe('function');
   });
@@ -269,7 +345,7 @@ describe('Glitch.js Built-in Effects factories', () => {
   it('should create slice effect structure', () => {
     const fx = Effects.slice();
     expect(fx.name).toBe('slice');
-    expect(typeof fx.setup).toBe('function');
+    expect(fx.clones).toBe(2);
     expect(typeof fx.update).toBe('function');
   });
 

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`GlitchEffect.clones`**: An effect declares how many overlay clones it paints on, and the engine owns the pool: it sizes it to the largest count any active effect declares, builds it before the first `setup` runs, and releases it once no active effect asks for one. Effects that declare clones share one pool, so two effects asking for two get the same two rather than four. `createClones()` and `removeClones()` remain public for effects that manage their own.
+
+### Changed
+- **Clone Ownership Moved from the Effects to the Engine**: `rgbSplit` and `slice` created the clones in `setup` and removed every clone in `cleanup`, so correctness rested on the order of those hooks — dropping one of two clone-sharing effects worked only because the survivor's `setup` happened to rebuild what the other's `cleanup` had just destroyed, and a clone-based effect without that rebuilding `setup` would have been left with nothing to paint. Both effects now declare `clones: 2` and clear only their own paint in `cleanup`, leaving the clones standing for whatever still needs them. A side effect of engine ownership: an `updateOptions` call that does not change the clone count now keeps the existing clones instead of tearing them down and rebuilding them, so the effect no longer drops a frame across a reconfiguration.
+
 ## [2.1.0] - 2026-10-14
 
 ### Added

@@ -219,6 +219,21 @@ Instantiates the distortion engine on a target DOM element.
 - **`updateOptions(newOptions)`**: Cleanly stops, reconfigures, and restarts the engine with new options on the fly.
 - **`destroy()`**: Shuts down the engine, removes all observers/event listeners, deletes all clone overlays from the DOM, and restores original styles.
 
+### `GlitchEffect`
+
+The shape every effect module has, and what a custom effect implements.
+
+| Member | Type | Description |
+| :--- | :--- | :--- |
+| `name` | `string` | Identifies the effect. |
+| `clones` | `number?` | How many overlay clones the effect paints on. The engine owns the pool: it sizes it to the largest count any active effect declares, builds it before the first `setup`, and removes it once no active effect asks for one. |
+| `setup` | `(instance) => void` | Runs once when the engine initialises, and again after `updateOptions`. |
+| `update` | `(instance, time) => void` | Runs on every animation frame while the engine is running. |
+| `reset` | `(instance) => void` | Undoes what `update` painted; runs on `stop()` and when the motion preference changes. |
+| `cleanup` | `(instance) => void` | Runs when `updateOptions` drops the effect, and on `destroy()`. Clears what the effect painted on shared nodes such as clones, and removes any DOM of its own. |
+
+Effects that declare `clones` share one pool, so two effects asking for two clones get the same two, not four. An effect clears its own paint in `cleanup` rather than removing the clones, because the pool may outlive it to serve another effect.
+
 ---
 
 ## Reduced Motion
