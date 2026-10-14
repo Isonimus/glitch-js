@@ -48,6 +48,45 @@ describe('Glitch.js Core Engine', () => {
     glitch.destroy();
   });
 
+  it('should remove the clones when updateOptions drops the effect that owns them', () => {
+    const glitch = new Glitch(container, {
+      active: true,
+      trigger: 'always',
+      effects: [Effects.rgbSplit()],
+    });
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(2);
+
+    glitch.updateOptions({ effects: [Effects.shake()] });
+
+    // The `start()` that follows updateOptions reveals every tracked clone, so
+    // orphans come back as unfiltered screen-blended copies of the element.
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(0);
+    expect(glitch.clones.length).toBe(0);
+
+    glitch.destroy();
+  });
+
+  it('should keep clones a remaining effect still claims, without stale blending', () => {
+    const glitch = new Glitch(container, {
+      active: true,
+      trigger: 'always',
+      effects: [Effects.rgbSplit(), Effects.slice()],
+    });
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(2);
+
+    glitch.updateOptions({ effects: [Effects.slice()] });
+
+    // slice shares the clones, so dropping rgbSplit must not leave it without
+    // any -- and none may keep the channel filter or blend mode rgbSplit set.
+    expect(container.querySelectorAll('.glitch-clone').length).toBe(2);
+    expect(glitch.clones.length).toBe(2);
+    expect(glitch.clones.every((clone) => clone.parentNode === container)).toBe(true);
+    expect(glitch.clones.every((clone) => clone.style.filter === '')).toBe(true);
+    expect(glitch.clones.every((clone) => clone.style.mixBlendMode === '')).toBe(true);
+
+    glitch.destroy();
+  });
+
   it('should trigger start and stop cycles correctly', () => {
     const glitch = new Glitch(container, {
       active: false,
