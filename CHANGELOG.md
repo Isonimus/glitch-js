@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [2.0.0] - 2026-09-08
 
 ### Added
-- **`DecryptOptions.preformatted`**: Declares that the target renders whitespace verbatim (`white-space: pre`, `pre-wrap`, `break-spaces`, or a `<pre>` element), so `maskWhitespace` masks whitespace runs and indentation as well as single spaces. Explicit rather than detected, because a detected version could not be tested: `getComputedStyle` reports no usable `white-space` under jsdom. Tabs, line breaks, and whitespace-only text nodes stay out of the mask either way.
+- **`DecryptOptions.preformatted`**: Declares that the target renders whitespace verbatim (`white-space: pre`, `pre-wrap`, `break-spaces`, or a `<pre>` element), so `maskWhitespace` masks whitespace runs and indentation as well as single spaces. Explicit rather than detected, because a detected version could not be tested: `getComputedStyle` reports no usable `white-space` under the headless DOM the test suite runs on (happy-dom). Tabs, line breaks, and whitespace-only text nodes stay out of the mask either way.
 
 ### Changed
 - **Declaration Build Scope**: The library's declaration build now follows the published entry point only. The tsconfig program spans all of `src`, so `glitch.test.d.ts` and `playground.d.ts` were emitted into `dist/lib` and shipped to consumers — the latter implying a public surface that is not one. The published tarball is now `LICENSE`, `README.md`, `package.json`, and the three `dist/lib` artifacts.

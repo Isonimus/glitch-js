@@ -92,8 +92,8 @@ export interface DecryptOptions {
    * `pre-wrap`, `break-spaces`, or a `<pre>` element), so `maskWhitespace` may
    * mask whitespace runs and indentation as well as single spaces. It is an
    * explicit option because the alternative is unverifiable: `getComputedStyle`
-   * reports nothing usable under jsdom, so an inferred version of this could
-   * not be tested. Leave it `false` for ordinary HTML, where layout collapses
+   * reports nothing usable under the headless DOM the suite runs on, so an
+   * inferred version of this could not be tested. Leave it `false` for ordinary HTML, where layout collapses
    * that whitespace and masking it would change the rendered length.
    */
   preformatted?: boolean;
