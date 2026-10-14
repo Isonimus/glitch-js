@@ -835,13 +835,17 @@ export class Glitch {
 
     this.restoreManagedText();
 
-    // Hide and reset all clones
-    this.clones.forEach((c) => {
-      c.style.display = 'none';
-      c.style.transform = '';
-      c.style.clipPath = '';
-      c.style.opacity = '';
-      c.style.filter = '';
+    // Hide the clones and drop what the update loop painted on them. Styling
+    // an effect established in `setup` -- rgbSplit's channel filters and blend
+    // mode -- is left alone: it belongs to the effect for as long as the effect
+    // is installed, and clearing the filter here meant every hover after the
+    // first showed unfiltered copies. A dropped effect takes its clones with
+    // it through `cleanup`, so nothing stale survives it either.
+    this.clones.forEach((clone) => {
+      clone.style.display = 'none';
+      clone.style.transform = '';
+      clone.style.clipPath = '';
+      clone.style.opacity = '';
     });
 
     // Run reset functions for effects

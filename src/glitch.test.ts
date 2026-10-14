@@ -48,6 +48,28 @@ describe('Glitch.js Core Engine', () => {
     glitch.destroy();
   });
 
+  it('should keep the rgbSplit channel filters across repeated hovers', () => {
+    const glitch = new Glitch(container, {
+      active: true,
+      trigger: 'hover',
+      effects: [Effects.rgbSplit()],
+    });
+
+    container.dispatchEvent(new MouseEvent('mouseenter'));
+    container.dispatchEvent(new MouseEvent('mouseleave'));
+    container.dispatchEvent(new MouseEvent('mouseenter'));
+
+    // rgbSplit applies its channel filters once, in setup. Clearing them on
+    // stop left every hover after the first showing unfiltered full-colour
+    // copies, still screen-blended, which washes the element out instead of
+    // splitting it.
+    expect(glitch.clones[0].style.filter).toBe('url(#glitch-filter-red)');
+    expect(glitch.clones[1].style.filter).toBe('url(#glitch-filter-cyan)');
+    expect(glitch.clones[0].style.mixBlendMode).toBe('screen');
+
+    glitch.destroy();
+  });
+
   it('should remove the clones when updateOptions drops the effect that owns them', () => {
     const glitch = new Glitch(container, {
       active: true,
