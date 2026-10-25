@@ -32,3 +32,11 @@ jobs:
 
       - name: Run Unit Tests
         run: npm run test
+
+      # Runs last on purpose. A fresh advisory against a dependency is not a
+      # defect in the commit under test, so it must not pre-empt the signal
+      # from the build and the tests: those report first, then this fails the
+      # run. The threshold lives in the `audit` script so a contributor's local
+      # gate is the same gate.
+      - name: Audit Dependencies
+        run: npm run audit

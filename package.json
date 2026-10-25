@@ -26,7 +26,8 @@
     "build:lib": "vite build --config vite.config.lib.ts",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "audit": "npm audit --audit-level=high"
   },
   "keywords": [
     "glitch",

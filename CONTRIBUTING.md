@@ -46,7 +46,13 @@ When modifying code:
 1. Create a feature branch from the `main` branch.
 2. Implement your changes or new custom effects.
 3. Test your changes locally in the playground across multiple tabs and trigger modes (hover, click, scroll).
-4. Open a Pull Request against the `main` branch with a description of the changes, reproduction steps, or the visual impact.
+4. Run the same checks CI runs: `npm run build`, `npm run build:lib`, `npm run test`, and
+   `npm run audit`. The audit gate fails on a high or critical advisory in the dependency
+   tree, including one that has nothing to do with your change: GitHub's own scan is
+   scheduled, so it can lag an advisory by days, and this gate does not. When it trips on
+   something unrelated, bump the offending dependency in the same branch if the fix is
+   contained, or record it in `LEDGER.md` and say so in the PR if it is not.
+5. Open a Pull Request against the `main` branch with a description of the changes, reproduction steps, or the visual impact.
 
 ## Reporting Bugs
 
